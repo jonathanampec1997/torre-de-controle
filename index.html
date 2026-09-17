@@ -1100,6 +1100,12 @@ details > summary::-webkit-details-marker{display:none;}
     var idx = FULLS.findIndex(function(f){ return f.id===id; });
     if (idx>-1) FULLS[idx] = fullFromRow(res.data);
   }
+  async function removerFull(id){
+    var res = await sb.from("fulls").delete().eq("id", id);
+    if (res.error) throw res.error;
+    var idx = FULLS.findIndex(function(f){ return f.id===id; });
+    if (idx>-1) FULLS.splice(idx,1);
+  }
   function fullById(id){ return FULLS.filter(function(f){ return f.id===id; })[0]; }
 
   /* ============================ STATE ============================ */
@@ -3412,6 +3418,7 @@ details > summary::-webkit-details-marker{display:none;}
           '<button class="btn-primary" data-full-forward="' + f.id + '"' + (podeAvancar?'':' disabled') + ' title="Avançar um status">Avançar ›</button>' +
           (podeNfe ? '<button class="btn-small" data-full-nfe-open="' + f.id + '">NF-e</button>' : '') +
           '<button class="btn-small" data-full-edit="' + f.id + '">Editar</button>' +
+          '<button class="btn-danger" data-full-remove="' + f.id + '">Remover</button>' +
         '</div></td>' +
       '</tr>';
       if (podeNfe && state.fullNfeDraft && state.fullNfeDraft.fullId === f.id){
@@ -4039,6 +4046,12 @@ details > summary::-webkit-details-marker{display:none;}
           state.sub.fulfillment = "calendario";
         }
         render();
+      });
+    });
+    root.querySelectorAll('[data-full-remove]').forEach(function(el){
+      el.addEventListener("click", function(){
+        var id = parseInt(el.getAttribute("data-full-remove"),10);
+        removerFull(id).then(render).catch(function(err){ alert("Falha ao remover: " + err.message); });
       });
     });
 
