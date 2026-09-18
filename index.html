@@ -687,6 +687,34 @@ details > summary::-webkit-details-marker{display:none;}
     if (res.error) throw res.error;
     INSUMO_MOVS.unshift(insumoMovFromRow(res.data));
   }
+  // Remove um registro de movimentação. Se for a movimentação MAIS RECENTE
+  // daquele insumo, também desfaz o efeito dela no estoque atual (ex.: um
+  // teste de "debitar 150" errado, removido na hora, devolve as 150
+  // unidades). Se já existir movimentação posterior (ex.: um "ajustar"
+  // manual feito depois pra corrigir o físico), só apaga o registro do
+  // histórico/relatório — o estoque atual não é tocado, porque já foi
+  // corrigido por aquela movimentação posterior e reverter aqui iria
+  // estragar o que já está certo.
+  async function removerInsumoMov(mov){
+    var movsDoInsumo = INSUMO_MOVS.filter(function(m){ return m.insumoId===mov.insumoId; });
+    var maisRecente = movsDoInsumo.reduce(function(a,b){
+      return (!a || new Date(b.quando) > new Date(a.quando)) ? b : a;
+    }, null);
+    if (maisRecente && maisRecente.id === mov.id){
+      var ins = insumoById(mov.insumoId);
+      if (ins){
+        await atualizarInsumo(ins.id, {
+          nome:ins.nome, categoria:ins.categoria, fornecedor:ins.fornecedor,
+          valorUnitario:ins.valorUnitario, unidade:ins.unidade,
+          estoque:ins.estoque - mov.delta, estoqueMinimo:ins.estoqueMinimo, observacao:ins.observacao
+        });
+      }
+    }
+    var res = await sb.from("insumo_movs").delete().eq("id", mov.id);
+    if (res.error) throw res.error;
+    var idx = INSUMO_MOVS.findIndex(function(m){ return m.id===mov.id; });
+    if (idx>-1) INSUMO_MOVS.splice(idx,1);
+  }
   function insumoMovTipoLabel(t){ return {adicionar:"Adicionado", debitar:"Debitado (uso)", ajustar:"Ajuste"}[t] || t; }
 
   // Vínculo SKU -> insumo: recurso ainda não ativo de verdade (SKUS está
@@ -2442,11 +2470,12 @@ details > summary::-webkit-details-marker{display:none;}
     '</tbody></table></div>';
 
     var historicoRows = movsNoPeriodo.slice().sort(function(a,b){ return new Date(b.quando) - new Date(a.quando); });
-    var historicoTable = '<div class="table-wrap"><table><thead><tr><th>Data/Hora</th><th>Insumo</th><th>Tipo</th><th>Quantidade</th><th>Estoque antes → depois</th></tr></thead><tbody>' +
+    var historicoTable = '<div class="table-wrap"><table><thead><tr><th>Data/Hora</th><th>Insumo</th><th>Tipo</th><th>Quantidade</th><th>Estoque antes → depois</th><th>Ações</th></tr></thead><tbody>' +
       (historicoRows.length ? historicoRows.map(function(m){
         var insH = insumoById(m.insumoId);
-        return '<tr><td class="mono">' + fmtDateTime(m.quando) + '</td><td>' + escHtml(insH?insH.nome:"—") + '</td><td>' + insumoMovTipoLabel(m.tipo) + '</td><td class="num">' + fmtInt(m.valor) + '</td><td class="num">' + fmtInt(m.estoqueAntes) + ' → ' + fmtInt(m.estoqueDepois) + '</td></tr>';
-      }).join("") : '<tr><td colspan="5" style="color:var(--ink-3);">Nenhuma movimentação nesse período.</td></tr>') +
+        return '<tr><td class="mono">' + fmtDateTime(m.quando) + '</td><td>' + escHtml(insH?insH.nome:"—") + '</td><td>' + insumoMovTipoLabel(m.tipo) + '</td><td class="num">' + fmtInt(m.valor) + '</td><td class="num">' + fmtInt(m.estoqueAntes) + ' → ' + fmtInt(m.estoqueDepois) + '</td>' +
+          '<td><button class="btn-danger" data-insumomov-remove="' + m.id + '" title="Remove o registro do histórico. Se for a movimentação mais recente do insumo, também desfaz o efeito no estoque atual.">Remover</button></td></tr>';
+      }).join("") : '<tr><td colspan="6" style="color:var(--ink-3);">Nenhuma movimentação nesse período.</td></tr>') +
     '</tbody></table></div>';
 
     var relatorioCard = '<div class="card">' +
@@ -3930,6 +3959,14 @@ details > summary::-webkit-details-marker{display:none;}
           state.insumoMovError = "Falha ao salvar: " + err.message;
           render();
         });
+    });
+    root.querySelectorAll('[data-insumomov-remove]').forEach(function(el){
+      el.addEventListener("click", function(){
+        var id = parseInt(el.getAttribute("data-insumomov-remove"),10);
+        var mov = INSUMO_MOVS.filter(function(m){ return m.id===id; })[0];
+        if (!mov) return;
+        removerInsumoMov(mov).then(render).catch(function(err){ alert("Falha ao remover: " + err.message); });
+      });
     });
     root.querySelectorAll("[data-insumo-period]").forEach(function(el){
       el.addEventListener("click", function(){
