@@ -302,6 +302,13 @@ tr:last-child td{border-bottom:none;}
 .sector-card.static:hover{border-color:var(--border);}
 .sector-card .row1{display:flex; justify-content:space-between; align-items:center;}
 .sector-card h3{font-size:1.02rem;}
+/* Cards de categoria de erro (Outbound · Erros Operacional) — fundo escuro
+   com texto branco, por pedido do dono ("mude a cor dos textos dos cards
+   pra branco"); fundo mais vinho quando aberto/expandido pra dar destaque. */
+.sector-card.erro-cat-card{background:#00121E; border-color:#00121E; color:#fff;}
+.sector-card.erro-cat-card:hover{border-color:var(--accent);}
+.sector-card.erro-cat-card .mini-kpis .l{color:rgba(255,255,255,.65);}
+.sector-card.erro-cat-card.open{background:linear-gradient(155deg, #8F1D21, #400001); border-color:#8F1D21;}
 .chip{
   font-size:.65rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
   padding:3px 8px; border-radius:99px;
@@ -3433,7 +3440,7 @@ details > summary::-webkit-details-marker{display:none;}
     var categoriaCardsHtml = catList.length
       ? '<div class="sector-cards">' + catList.map(function(c){
           var aberto = state.erroCategoriaExpandida === c.nome;
-          return '<button class="sector-card" data-erro-cat-toggle="' + escAttr(c.nome) + '"' + (aberto ? ' style="border-color:var(--accent);"' : '') + '>' +
+          return '<button class="sector-card erro-cat-card' + (aberto ? " open" : "") + '" data-erro-cat-toggle="' + escAttr(c.nome) + '">' +
             '<div class="row1"><h3>' + escHtml(c.nome) + '</h3>' + (aberto ? '<span class="chip live">aberto</span>' : '') + '</div>' +
             '<div class="mini-kpis"><div><span class="v mono">' + fmtInt(c.itens.length) + '</span><span class="l">erro(s) no período</span></div></div>' +
           '</button>';
