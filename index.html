@@ -786,6 +786,51 @@ details > summary::-webkit-details-marker{display:none;}
     if (idx>-1) FAQS.splice(idx,1);
   }
 
+  /* ---- Outbound: colaboradores (Responsável dos erros operacionais) ---- */
+  var USUARIOS = [];
+  function usuarioFromRow(r){ return {id:r.id, nome:r.nome}; }
+  async function carregarUsuarios(){
+    var res = await sb.from("usuarios").select("*").order("nome");
+    if (res.error){ console.error("Falha ao carregar colaboradores:", res.error); return; }
+    USUARIOS = res.data.map(usuarioFromRow);
+  }
+  async function criarUsuario(nome){
+    var res = await sb.from("usuarios").insert({nome:nome}).select().single();
+    if (res.error) throw res.error;
+    USUARIOS.push(usuarioFromRow(res.data));
+  }
+  async function atualizarUsuario(id, nome){
+    var res = await sb.from("usuarios").update({nome:nome}).eq("id", id).select().single();
+    if (res.error) throw res.error;
+    var idx = USUARIOS.findIndex(function(u){ return u.id===id; });
+    if (idx>-1) USUARIOS[idx] = usuarioFromRow(res.data);
+  }
+  async function removerUsuario(id){
+    var res = await sb.from("usuarios").delete().eq("id", id);
+    if (res.error) throw res.error;
+    var idx = USUARIOS.findIndex(function(u){ return u.id===id; });
+    if (idx>-1) USUARIOS.splice(idx,1);
+  }
+  // Cria sozinho qualquer "Responsável" novo que apareça nos erros recém
+  // sincronizados da planilha — sem duplicar (upsert com nome único; se já
+  // existir, o upsert só ignora) e sem travar o sync se um nome falhar.
+  async function autoCriarUsuariosDosErros(){
+    var existentes = {};
+    USUARIOS.forEach(function(u){ existentes[normalizeText(u.nome)] = true; });
+    var novosNomes = {};
+    ERROS_OPERACIONAIS.forEach(function(e){
+      var nome = (e.responsavel||"").trim();
+      if (nome && !existentes[normalizeText(nome)]) novosNomes[nome] = true;
+    });
+    var lista = Object.keys(novosNomes);
+    for (var i=0; i<lista.length; i++){
+      try {
+        var res = await sb.from("usuarios").upsert({nome:lista[i]}, {onConflict:"nome", ignoreDuplicates:true}).select();
+        if (!res.error && res.data && res.data.length) USUARIOS.push(usuarioFromRow(res.data[0]));
+      } catch(e){}
+    }
+  }
+
   /* ---- Ajuda: MIP (Manual Interno de Procedimentos) ---- */
   // Metadados na tabela `mips`; anexos (fotos, PDFs etc.) no Supabase Storage
   // (bucket público "mip-anexos") + tabela `mip_anexos` apontando pra eles —
@@ -1187,7 +1232,9 @@ details > summary::-webkit-details-marker{display:none;}
     fullNfeDraft:null,
     faqDraft:null, faqError:null,
     mipDraft:null, mipDraftKey:null, mipError:null, mipBusy:false, mipExpanded:null,
-    fullEmpresaDraft:null, fullEmpresaError:null
+    fullEmpresaDraft:null, fullEmpresaError:null,
+    erroFiltroResponsavel:"todos", erroCategoriaExpandida:null,
+    usuarioDraft:null, usuarioError:null
   };
 
   function empresaColor(id){ return "var(--c-" + id + ")"; }
@@ -1646,6 +1693,7 @@ details > summary::-webkit-details-marker{display:none;}
       var result = mergeIntoData(conn.targetAba, rows);
       conn.status = "ok"; conn.lastSync = new Date().toISOString(); conn.lastError = null; conn.rowCount = result.linhas;
       conn.cachedRows = rows.map(serializeRow);
+      if (conn.targetAba === "erros") await autoCriarUsuariosDosErros();
       await detalhePromise;
       return true;
     } catch(err){
@@ -3072,30 +3120,6 @@ details > summary::-webkit-details-marker{display:none;}
         metaBadge(prodSepCur, METAS.produtividadeSep, true, fmtInt(METAS.produtividadeSep) + " pedidos/h"))
     ];
 
-    /* ---- Qualidade da separação / embalagem ---- */
-    function qualOutVal(day, field){ return opFactorOut(day) * sepBase(day, field); }
-    var errosCur = sum(cur, function(d){return qualOutVal(d,"errosSeparacao");});
-    var errosPrev = sum(prev, function(d){return qualOutVal(d,"errosSeparacao");});
-    var retrabCur = sum(cur, function(d){return qualOutVal(d,"retrabalho");});
-    var retrabPrev = sum(prev, function(d){return qualOutVal(d,"retrabalho");});
-    var taxaErroCur = sepCur ? errosCur/sepCur*100 : 0;
-    var taxaErroPrev = sepPrev ? errosPrev/sepPrev*100 : 0;
-    var taxaRetrabCur = sepCur ? retrabCur/sepCur*100 : 0;
-    var taxaRetrabPrev = sepPrev ? retrabPrev/sepPrev*100 : 0;
-
-    var qualKpisOut = [
-      kpiCard("Erros de separação", fmtInt(errosCur), "un", errosCur, errosPrev, "lower-better", cur.map(function(d){return qualOutVal(d,"errosSeparacao");}), "var(--accent)"),
-      kpiCard("Taxa de erro de separação", fmtDec(taxaErroCur,2), "%", taxaErroCur, taxaErroPrev, "lower-better", null, "var(--accent)"),
-      kpiCard("Pedidos com retrabalho", fmtInt(retrabCur), "un", retrabCur, retrabPrev, "lower-better", cur.map(function(d){return qualOutVal(d,"retrabalho");}), "var(--accent)"),
-      kpiCard("Taxa de retrabalho", fmtDec(taxaRetrabCur,2), "%", taxaRetrabCur, taxaRetrabPrev, "lower-better", null, "var(--accent)")
-    ];
-    var qualResumoOut = '<div class="mini-table-title">Qualidade por plataforma — período selecionado</div><div class="table-wrap"><table><thead><tr><th>Plataforma</th><th>Erros de separação</th><th>Taxa de erro</th><th>Retrabalho</th><th>Taxa de retrabalho</th></tr></thead><tbody>' +
-      PLATAFORMAS.map(function(p){
-        var er = sum(cur,function(d){return opFactorOut(d)*d.plataformas[p.id].errosSeparacao;});
-        var rt = sum(cur,function(d){return opFactorOut(d)*d.plataformas[p.id].retrabalho;});
-        var sp = sum(cur,function(d){return opFactorOut(d)*d.plataformas[p.id].separados;});
-        return '<tr><td><span class="dot" style="display:inline-block;margin-right:6px;background:' + plataformaColor(p.id) + '"></span>' + p.nome + '</td><td class="num">' + fmtInt(er) + '</td><td class="num">' + fmtDec(sp?er/sp*100:0,2) + '%</td><td class="num">' + fmtInt(rt) + '</td><td class="num">' + fmtDec(sp?rt/sp*100:0,2) + '%</td></tr>';
-      }).join("") + '</tbody></table></div>';
 
     var sepChart = pk.length > 1
       ? stackedBarChart("out-sep", cur, pk, function(d,k){ return d.plataformas[k].separados; }, plataformaColor, plataformaNome)
@@ -3388,22 +3412,115 @@ details > summary::-webkit-details-marker{display:none;}
       var iso = isoDate(e.data);
       return iso >= state.dateStart && iso <= state.dateEnd;
     });
+    var errosFiltrados = errosNoPeriodo.filter(function(e){
+      return state.erroFiltroResponsavel === "todos" || (e.responsavel||"") === state.erroFiltroResponsavel;
+    });
+
+    var respFiltroHtml = '<div class="filter-field"><span class="fl">Responsável</span><select data-erro-resp-filter>' +
+      '<option value="todos"' + (state.erroFiltroResponsavel==="todos"?" selected":"") + '>Todos</option>' +
+      USUARIOS.map(function(u){ return '<option value="' + escAttr(u.nome) + '"' + (state.erroFiltroResponsavel===u.nome?" selected":"") + '>' + escHtml(u.nome) + '</option>'; }).join("") +
+    '</select></div>';
+
+    /* ---- Cards por categoria de erro (clicável — expande a lista de descrições) ---- */
+    var porCategoria = {};
+    errosFiltrados.forEach(function(e){
+      var cat = (e.categoria||"").trim() || "Sem categoria";
+      (porCategoria[cat] = porCategoria[cat] || []).push(e);
+    });
+    var catList = Object.keys(porCategoria).map(function(cat){ return {nome:cat, itens:porCategoria[cat]}; })
+      .sort(function(a,b){ return b.itens.length - a.itens.length; });
+
+    var categoriaCardsHtml = catList.length
+      ? '<div class="sector-cards">' + catList.map(function(c){
+          var aberto = state.erroCategoriaExpandida === c.nome;
+          return '<button class="sector-card" data-erro-cat-toggle="' + escAttr(c.nome) + '"' + (aberto ? ' style="border-color:var(--accent);"' : '') + '>' +
+            '<div class="row1"><h3>' + escHtml(c.nome) + '</h3>' + (aberto ? '<span class="chip live">aberto</span>' : '') + '</div>' +
+            '<div class="mini-kpis"><div><span class="v mono">' + fmtInt(c.itens.length) + '</span><span class="l">erro(s) no período</span></div></div>' +
+          '</button>';
+        }).join("") + '</div>'
+      : '<div class="conn-empty">Nenhum erro no período/filtro selecionado.</div>';
+
+    var catAberta = state.erroCategoriaExpandida ? catList.filter(function(c){ return c.nome === state.erroCategoriaExpandida; })[0] : null;
+    var categoriaDetalheHtml = catAberta ? (
+      '<div class="card">' +
+        '<div class="card-head"><div class="card-title">Erros — ' + escHtml(catAberta.nome) + '</div><button class="btn-ghost" data-erro-cat-close>Fechar</button></div>' +
+        '<div class="table-wrap"><table><thead><tr><th>Data</th><th>Produto/SKU</th><th>Pedido</th><th>Responsável</th><th>Descrição do Motivo</th></tr></thead><tbody>' +
+          catAberta.itens.map(function(e){
+            return '<tr><td class="mono">' + fmtDateBR(isoDate(e.data)) + '</td><td>' + escHtml(e.produtoSku||"—") + '</td><td>' + escHtml(e.pedido||"—") + '</td><td>' + escHtml(e.responsavel||"—") + '</td><td>' + escHtml(e.descricao||"—") + '</td></tr>';
+          }).join("") +
+        '</tbody></table></div>' +
+      '</div>'
+    ) : "";
+
+    /* ---- Dash de erros por colaborador ---- */
+    var porResponsavel = {};
+    errosFiltrados.forEach(function(e){
+      var nome = (e.responsavel||"").trim() || "Sem responsável";
+      porResponsavel[nome] = (porResponsavel[nome]||0) + 1;
+    });
+    var respList = Object.keys(porResponsavel).map(function(nome){ return {nome:nome, count:porResponsavel[nome]}; })
+      .sort(function(a,b){ return b.count - a.count; });
+    var maxResp = respList.length ? respList[0].count : 0;
+    var colaboradoresDashHtml = respList.length
+      ? respList.map(function(r){
+          var pct = maxResp ? (r.count/maxResp*100) : 0;
+          return '<div class="pbar-row"><div class="pbar-label">' + escHtml(r.nome) + '</div>' +
+            '<div class="pbar-track"><div class="pbar-fill" style="width:' + pct.toFixed(0) + '%; background:var(--accent);"></div></div>' +
+            '<div class="pbar-val">' + fmtInt(r.count) + '</div></div>';
+        }).join("")
+      : '<div class="conn-empty">Nenhum erro no período/filtro selecionado.</div>';
+
+    /* ---- Gestão de colaboradores (cria sozinho ao sincronizar; edição manual aqui) ---- */
+    var usuarioDraft = state.usuarioDraft;
+    var usuariosListaHtml = USUARIOS.length
+      ? '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>Ações</th></tr></thead><tbody>' +
+        USUARIOS.map(function(u){
+          return '<tr><td>' + escHtml(u.nome) + '</td><td><div class="btn-row">' +
+            '<button class="btn-small" data-usuario-edit="' + u.id + '">Editar</button>' +
+            '<button class="btn-danger" data-usuario-remove="' + u.id + '">Remover</button>' +
+          '</div></td></tr>';
+        }).join("") + '</tbody></table></div>'
+      : '<div class="conn-empty">Nenhum colaborador cadastrado ainda — aparece sozinho ao sincronizar a planilha, ou cadastre manualmente.</div>';
+    var usuarioFormHtml = usuarioDraft ? (
+      '<div class="card" style="margin-top:10px; box-shadow:none; border:1px dashed var(--border);">' +
+        '<div class="mini-table-title">' + (usuarioDraft.id===null ? "Novo colaborador" : "Editar colaborador") + '</div>' +
+        (state.usuarioError ? '<div class="conn-error" style="margin-top:8px;">' + escHtml(state.usuarioError) + '</div>' : '') +
+        '<div class="form-field"><label>Nome</label><input type="text" data-usuario-field="nome" value="' + escAttr(usuarioDraft.nome) + '" placeholder="Ex.: Emily"></div>' +
+        '<div class="btn-row" style="margin-top:10px;">' +
+          '<button class="btn-primary" data-usuario-save>Salvar</button>' +
+          '<button class="btn-ghost" data-usuario-cancel>Cancelar</button>' +
+        '</div>' +
+      '</div>'
+    ) : "";
+    var usuariosCardHtml = '<div class="filters" style="margin-bottom:10px;">' +
+      (!usuarioDraft ? '<button class="btn-primary" data-usuario-new>+ Novo colaborador</button>' : '') +
+    '</div>' + usuariosListaHtml + usuarioFormHtml;
+
     var errosRegistradosTable = '<div class="table-wrap"><table><thead><tr><th>Data</th><th>Produto/SKU</th><th>Pedido</th><th>Categoria do Erro</th><th>Responsável</th><th>Descrição do Motivo</th></tr></thead><tbody>' +
-      (errosNoPeriodo.length ? errosNoPeriodo.map(function(e){
+      (errosFiltrados.length ? errosFiltrados.map(function(e){
         return '<tr><td class="mono">' + fmtDateBR(isoDate(e.data)) + '</td><td>' + escHtml(e.produtoSku||"—") + '</td><td>' + escHtml(e.pedido||"—") + '</td><td>' + escHtml(e.categoria||"—") + '</td><td>' + escHtml(e.responsavel||"—") + '</td><td>' + escHtml(e.descricao||"—") + '</td></tr>';
-      }).join("") : '<tr><td colspan="6" style="color:var(--ink-3);">Nenhum erro registrado nesse período.</td></tr>') +
+      }).join("") : '<tr><td colspan="6" style="color:var(--ink-3);">Nenhum erro registrado nesse período/filtro.</td></tr>') +
     '</tbody></table></div>';
 
     var errosHtml =
-      '<div class="topbar"><div><h1>Outbound · Erros Operacional</h1><p>Erros identificados durante a separação e pedidos que precisaram de retrabalho.</p></div>' + topbarFiltersOut + '</div>' +
+      '<div class="topbar"><div><h1>Outbound · Erros Operacional</h1><p>Erros identificados na operação, vindos da planilha de Erros Operacional.</p></div>' + topbarFiltersOut + '</div>' +
       '<div class="content">' +
         '<section class="sector">' +
-          '<div class="sector-head"><h2>Qualidade da separação e embalagem</h2><div class="desc">Erros identificados durante a separação e pedidos que precisaram de retrabalho.</div></div>' +
-          '<div class="kpi-grid">' + qualKpisOut.join("") + '</div>' +
-          '<div class="card">' + qualResumoOut + '</div>' +
+          '<div class="sector-head"><h2>Tipos de erro</h2><div class="desc">Quantidade de erros por categoria no período selecionado — clique num card para ver as descrições.</div>' + fonteBadge("erros") + '</div>' +
+          '<div class="filters">' + respFiltroHtml + '</div>' +
+          categoriaCardsHtml +
+        '</section>' +
+        (categoriaDetalheHtml ? '<section class="sector">' + categoriaDetalheHtml + '</section>' : '') +
+        '<section class="sector">' +
+          '<div class="sector-head"><h2>Erros por colaborador</h2><div class="desc">Quantos erros cada responsável teve no período/filtro selecionado.</div></div>' +
+          '<div class="card">' + colaboradoresDashHtml + '</div>' +
         '</section>' +
         '<section class="sector">' +
-          '<div class="sector-head"><h2>Erros registrados</h2><div class="desc">Lista de erros da planilha de Erros Operacional, um por linha.</div>' + fonteBadge("erros") + '</div>' +
+          '<div class="sector-head"><h2>Colaboradores</h2><div class="desc">Cadastro dos responsáveis — criado automaticamente ao sincronizar a planilha, mas dá pra ajustar aqui.</div></div>' +
+          '<div class="card">' + usuariosCardHtml + '</div>' +
+        '</section>' +
+        '<section class="sector">' +
+          '<div class="sector-head"><h2>Erros registrados</h2><div class="desc">Lista completa, um erro por linha.</div></div>' +
           '<div class="card">' +
           (ERROS_OPERACIONAIS.length
             ? errosRegistradosTable
@@ -3947,6 +4064,68 @@ details > summary::-webkit-details-marker{display:none;}
         state.sub[group] = id;
         state.page = group;
         state.navExpanded = null;
+        render();
+      });
+    });
+
+    /* ---- Outbound: Erros Operacional ---- */
+    var erroRespFilterEl = root.querySelector('[data-erro-resp-filter]');
+    if (erroRespFilterEl) erroRespFilterEl.addEventListener("change", function(){
+      state.erroFiltroResponsavel = erroRespFilterEl.value;
+      render();
+    });
+    root.querySelectorAll('[data-erro-cat-toggle]').forEach(function(el){
+      el.addEventListener("click", function(){
+        var cat = el.getAttribute("data-erro-cat-toggle");
+        state.erroCategoriaExpandida = (state.erroCategoriaExpandida === cat) ? null : cat;
+        render();
+      });
+    });
+    var erroCatCloseBtn = root.querySelector('[data-erro-cat-close]');
+    if (erroCatCloseBtn) erroCatCloseBtn.addEventListener("click", function(){
+      state.erroCategoriaExpandida = null; render();
+    });
+    var usuarioNewBtn = root.querySelector('[data-usuario-new]');
+    if (usuarioNewBtn) usuarioNewBtn.addEventListener("click", function(){
+      state.usuarioDraft = {id:null, nome:""}; state.usuarioError = null; render();
+    });
+    var usuarioCancelBtn = root.querySelector('[data-usuario-cancel]');
+    if (usuarioCancelBtn) usuarioCancelBtn.addEventListener("click", function(){
+      state.usuarioDraft = null; state.usuarioError = null; render();
+    });
+    root.querySelectorAll('[data-usuario-edit]').forEach(function(el){
+      el.addEventListener("click", function(){
+        var id = parseInt(el.getAttribute("data-usuario-edit"),10);
+        var u = USUARIOS.filter(function(x){ return x.id===id; })[0];
+        if (u) state.usuarioDraft = {id:u.id, nome:u.nome};
+        state.usuarioError = null;
+        render();
+      });
+    });
+    root.querySelectorAll('[data-usuario-remove]').forEach(function(el){
+      el.addEventListener("click", function(){
+        var id = parseInt(el.getAttribute("data-usuario-remove"),10);
+        removerUsuario(id).then(render).catch(function(err){ alert("Falha ao remover: " + err.message); });
+      });
+    });
+    root.querySelectorAll('input[data-usuario-field]').forEach(function(el){
+      el.addEventListener("change", function(){
+        if (!state.usuarioDraft) return;
+        state.usuarioDraft.nome = el.value;
+        render();
+      });
+    });
+    var usuarioSaveBtn = root.querySelector('[data-usuario-save]');
+    if (usuarioSaveBtn) usuarioSaveBtn.addEventListener("click", function(){
+      var d = state.usuarioDraft;
+      var nome = (d.nome||"").trim();
+      if (!nome){ state.usuarioError = "Informe o nome do colaborador."; render(); return; }
+      var promessa = d.id === null ? criarUsuario(nome) : atualizarUsuario(d.id, nome);
+      promessa.then(function(){
+        state.usuarioDraft = null; state.usuarioError = null;
+        render();
+      }).catch(function(err){
+        state.usuarioError = "Falha ao salvar: " + err.message;
         render();
       });
     });
@@ -4665,7 +4844,7 @@ details > summary::-webkit-details-marker{display:none;}
     document.getElementById("root").innerHTML = '<div style="padding:40px;text-align:center;color:#666;font-family:sans-serif;">Carregando dados...</div>';
     Promise.all([
       carregarInsumos(), carregarInsumoMovs(), carregarFaqs(), carregarMips(),
-      carregarFullEmpresas(), carregarFulls()
+      carregarFullEmpresas(), carregarFulls(), carregarUsuarios()
     ]).then(function(){
       render();
       subscribeTable("insumos", function(){ carregarInsumos().then(render); });
@@ -4675,6 +4854,7 @@ details > summary::-webkit-details-marker{display:none;}
       subscribeTable("mip_anexos", function(){ carregarMips().then(render); });
       subscribeTable("full_empresas", function(){ carregarFullEmpresas().then(render); });
       subscribeTable("fulls", function(){ carregarFulls().then(render); });
+      subscribeTable("usuarios", function(){ carregarUsuarios().then(render); });
       // Sincroniza sozinho, ao abrir a página, as conexões do tipo "planilha
       // Google" (link público, quase nunca falha) — assim qualquer pessoa
       // que abra o link já vê os dados reais sem precisar clicar em
