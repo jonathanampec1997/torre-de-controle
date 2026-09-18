@@ -139,6 +139,7 @@ a{color:inherit;}
 }
 .brand-name{font-family:"Manrope",sans-serif; font-weight:800; font-size:1.02rem; color:#F4F6F8;}
 .brand-sub{font-size:.72rem; color:#8891A0; margin-top:2px;}
+.sidebar-bar{display:contents;} /* no PC some — brand/nav/rodapé ficam direto na coluna da .sidebar; no mobile vira a barra real, ver media query */
 .nav-group{display:flex;flex-direction:column;gap:2px;}
 .nav-eyebrow{
   font-family:"Manrope",sans-serif; font-weight:700; font-size:.68rem; letter-spacing:.12em;
@@ -190,6 +191,13 @@ a{color:inherit;}
 }
 .nav-flyout button:hover{background:rgba(255,255,255,.06); color:#F1F3F5;}
 .nav-flyout button.active{background:rgba(143,29,33,.28); color:#FFE3E2; font-weight:700;}
+
+/* Painel mobile das subcategorias: bloco normal, embaixo da barra, SEM
+   position:fixed/absolute — no Safari/Chrome do iOS, um elemento fixed
+   dentro de um ancestral com overflow-x:auto (a barra de nav rolável)
+   renderiza fora do lugar/escondido (bug conhecido do WebKit). Some por
+   padrão (usado só na media query mobile abaixo). */
+.nav-mobile-flyout{display:none;}
 
 /* ---------- Main ---------- */
 .main{flex:1; min-width:0; display:flex; flex-direction:column; margin-left:232px;}
@@ -521,8 +529,12 @@ details > summary::-webkit-details-marker{display:none;}
 @media (max-width:860px){
   .app{flex-direction:column;}
   .sidebar{
-    width:100%; height:auto; position:sticky; top:0; flex-direction:row; align-items:center;
-    padding:10px 12px; gap:14px; overflow-x:auto;
+    width:100%; height:auto; position:sticky; top:0;
+    flex-direction:column; align-items:stretch; padding:0; gap:0;
+  }
+  .sidebar-bar{
+    display:flex; flex-direction:row; align-items:center;
+    padding:10px 12px; gap:14px; overflow-x:auto; width:100%;
   }
   .main{margin-left:0;}
   .brand{padding:0; flex-shrink:0;}
@@ -532,9 +544,23 @@ details > summary::-webkit-details-marker{display:none;}
   .nav-item{border-left:none; border-bottom:3px solid transparent; white-space:nowrap; padding:8px 10px;}
   .nav-item.active{border-left:none; border-bottom:3px solid var(--c-ampec);}
   .nav-group-item{flex-shrink:0;}
-  /* position:fixed (não absolute) de propósito: a sidebar mobile tem overflow-x:auto, que também
-     clipa overflow-y — um flyout position:absolute dentro dela ficaria cortado/invisível. */
-  .nav-flyout{ position:fixed; left:10px; right:10px; top:64px; margin:0; max-height:60vh; overflow-y:auto; }
+  /* O flyout de PC (position:absolute, flutua ao lado do botão) não
+     funciona bem no mobile e quebra de verdade em Safari/Chrome do iOS
+     (ver .nav-mobile-flyout abaixo) — desliga ele aqui e usa o painel
+     normal-flow no lugar. */
+  .nav-flyout{ display:none !important; }
+  .nav-mobile-flyout.open{
+    display:flex; flex-direction:column; gap:2px;
+    background:#171C25; border-top:1px solid #2B3340;
+    padding:8px 12px; max-height:60vh; overflow-y:auto; width:100%;
+  }
+  .nav-mobile-flyout button{
+    display:flex; align-items:center; width:100%; text-align:left;
+    padding:9px 10px; border-radius:7px; border:none; background:transparent;
+    color:#B7BFCB; font-size:.85rem; font-weight:500; cursor:pointer; font-family:inherit;
+  }
+  .nav-mobile-flyout button:hover{background:rgba(255,255,255,.06); color:#F1F3F5;}
+  .nav-mobile-flyout button.active{background:rgba(143,29,33,.28); color:#FFE3E2; font-weight:700;}
   .sidebar-foot{display:none;}
   .topbar{padding:14px 16px;}
   .content{padding:16px 16px 48px;}
@@ -2052,19 +2078,34 @@ details > summary::-webkit-details-marker{display:none;}
       '</div>';
     }
 
+    // Painel mobile (ver .nav-mobile-flyout no CSS): mesma lista de
+    // subcategorias do grupo aberto, mas em bloco normal embaixo da barra
+    // — reaproveita os mesmos data-nav-sub-group/data-nav-sub-id, então os
+    // handlers de clique já existentes funcionam sem nada extra.
+    var openGroupDef = groups.concat([ajudaGroup]).filter(function(g){ return g.id === state.navExpanded; })[0];
+    var mobileFlyoutHtml = '<div class="nav-mobile-flyout' + (openGroupDef ? " open" : "") + '">' +
+      (openGroupDef ? NAV_SUBS[openGroupDef.id].map(function(s){
+        var active = state.page === openGroupDef.id && state.sub[openGroupDef.id] === s.id;
+        return '<button class="' + (active?"active":"") + '" data-nav-sub-group="' + openGroupDef.id + '" data-nav-sub-id="' + s.id + '">' + s.label + '</button>';
+      }).join("") : "") +
+    '</div>';
+
     return '<aside class="sidebar">' +
-      '<div class="brand">' +
-        '<div class="brand-mark"><div class="brand-badge">A</div><div class="brand-name">Ampec</div></div>' +
-        '<div class="brand-sub">Torre de Controle · Galpão</div>' +
+      '<div class="sidebar-bar">' +
+        '<div class="brand">' +
+          '<div class="brand-mark"><div class="brand-badge">A</div><div class="brand-name">Ampec</div></div>' +
+          '<div class="brand-sub">Torre de Controle · Galpão</div>' +
+        '</div>' +
+        '<div class="nav-group">' +
+          '<div class="nav-eyebrow">Setores</div>' +
+          rootItemsTop.map(rootBtn).join("") +
+          groups.map(groupBtn).join("") +
+          rootItemsBottom.map(rootBtn).join("") +
+          groupBtn(ajudaGroup) +
+        '</div>' +
+        '<div class="sidebar-foot">Protótipo · dados fictícios<br>pronto para conectar ao banco</div>' +
       '</div>' +
-      '<div class="nav-group">' +
-        '<div class="nav-eyebrow">Setores</div>' +
-        rootItemsTop.map(rootBtn).join("") +
-        groups.map(groupBtn).join("") +
-        rootItemsBottom.map(rootBtn).join("") +
-        groupBtn(ajudaGroup) +
-      '</div>' +
-      '<div class="sidebar-foot">Protótipo · dados fictícios<br>pronto para conectar ao banco</div>' +
+      mobileFlyoutHtml +
     '</aside>';
   }
 
