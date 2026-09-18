@@ -171,8 +171,10 @@ a{color:inherit;}
 }
 
 /* ---------- Nav group flyout (Inbound/Outbound subcategorias) ---------- */
+/* Abre só ao CLICAR na categoria (não no hover) — mesmo comportamento no
+   PC e no mobile, já que no touch não existe hover pra abrir mesmo. */
 .nav-group-item{position:relative;}
-.nav-group-item:hover .nav-item .caret, .nav-group-item.open .nav-item .caret{transform:rotate(90deg);}
+.nav-group-item.open .nav-item .caret{transform:rotate(90deg);}
 .nav-flyout{
   position:absolute; left:100%; top:0; margin-left:6px; z-index:40;
   background:#171C25; border:1px solid #2B3340;
@@ -180,7 +182,7 @@ a{color:inherit;}
   border-radius:10px; min-width:210px; padding:6px;
   display:none; flex-direction:column;
 }
-.nav-group-item:hover .nav-flyout, .nav-group-item.open .nav-flyout{display:flex;}
+.nav-group-item.open .nav-flyout{display:flex;}
 .nav-flyout button{
   display:flex; align-items:center; width:100%; text-align:left;
   padding:8px 10px; border-radius:7px; border:none; background:transparent;
@@ -4541,16 +4543,24 @@ details > summary::-webkit-details-marker{display:none;}
     });
   }
 
+  // Captura ANTES de qualquer handler de clique rodar (fase de captura roda
+  // primeiro, de fora pra dentro) — só grava onde o clique realmente
+  // começou, sem mudar estado nem re-renderizar aqui. Precisa disso porque
+  // o handler do próprio botão (fase de bubble) chama render() e substitui
+  // o HTML todo; se a checagem de "clicou fora" rodasse depois disso
+  // (.closest() no e.target já órfão), nunca encontrava o ancestral — o
+  // menu fechava no mesmo clique que devia abrir (no PC passava batido
+  // porque o hover ainda mostrava o flyout por cima; no mobile, sem hover,
+  // nunca abria de verdade).
+  var lastClickInsideOpDropdown = false, lastClickInsideNavGroup = false;
+  document.addEventListener("click", function(e){
+    lastClickInsideOpDropdown = !!(e.target.closest && e.target.closest(".op-filter-wrap"));
+    lastClickInsideNavGroup = !!(e.target.closest && e.target.closest(".nav-group-item"));
+  }, true);
   document.addEventListener("click", function(e){
     var changed = false;
-    if (state.opDropdown !== null){
-      var wrap = e.target.closest ? e.target.closest(".op-filter-wrap") : null;
-      if (!wrap){ state.opDropdown = null; changed = true; }
-    }
-    if (state.navExpanded !== null){
-      var navWrap = e.target.closest ? e.target.closest(".nav-group-item") : null;
-      if (!navWrap){ state.navExpanded = null; changed = true; }
-    }
+    if (state.opDropdown !== null && !lastClickInsideOpDropdown){ state.opDropdown = null; changed = true; }
+    if (state.navExpanded !== null && !lastClickInsideNavGroup){ state.navExpanded = null; changed = true; }
     if (changed) render();
   });
 
