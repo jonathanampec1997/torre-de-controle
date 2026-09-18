@@ -897,6 +897,10 @@ details > summary::-webkit-details-marker{display:none;}
   var AGENDA_COLETA = [];
   var AGORA_HHMM = (function(){ var d=new Date(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); })();
 
+  // Erros operacionais: sem fonte real ainda até conectar em Fontes de
+  // Dados (Outbound → Erros Operacional) — vazio em vez de erros inventados.
+  var ERROS_OPERACIONAIS = [];
+
   var N_DAYS = 30;
   var TODAY = (function(){ var d = new Date(); d.setHours(0,0,0,0); return d; })(); // data real de hoje, não mais fixa
 
@@ -1256,9 +1260,21 @@ details > summary::-webkit-details-marker{display:none;}
         {key:"coleta", label:"Horário de coleta (hh:mm)", isText:true, required:true},
         {key:"pedidos", label:"Pedidos previstos", required:true}
       ]
+    },
+    erros: {
+      label:"Outbound · Erros Operacional", group:"Outbound", dimList:null, isSnapshot:true,
+      desc:"Uma linha por erro registrado — substitui a lista inteira a cada sincronização.",
+      fields:[
+        {key:"data", label:"Data", isDate:true, required:true},
+        {key:"produtoSku", label:"Produto/SKU", isText:true, required:false},
+        {key:"pedido", label:"Pedido", isText:true, required:false},
+        {key:"categoria", label:"Categoria do Erro", isText:true, required:true},
+        {key:"responsavel", label:"Responsável", isText:true, required:false},
+        {key:"descricao", label:"Descrição do Motivo", isText:true, required:false}
+      ]
     }
   };
-  var TARGET_ORDER = ["recebimento","armazenagem","abastecimento","separacao","embalagem","agenda"];
+  var TARGET_ORDER = ["recebimento","armazenagem","abastecimento","separacao","embalagem","agenda","erros"];
 
   var CONN_STORE_KEY = "torreControle.conexoes.v2"; // v2: empresas viraram os 5 IDs reais (ampec-pr/edn-ampec-sc/mapec-pr/ampec-sp/mapec-sc)
   // Pré-configurada: Recebimento já ligado ao WMS E-ship de verdade, via o
@@ -1275,6 +1291,13 @@ details > summary::-webkit-details-marker{display:none;}
         url:"http://localhost:3000/api/wms/recebimento-diario",
         sheetGid:"", apiHeaders:"", apiAuthToken:"", jsonPath:"",
         mapping:{data:"data", empresa:"empresa", nfs:"nfs", volumes:"volumes", unidades:"unidades", tempoConf:"tempoConf"},
+        status:"novo", lastSync:null, lastError:null, rowCount:0, cachedRows:null
+      },
+      {
+        id:2, nome:"Erros Operacional (planilha)", tipo:"sheets", targetAba:"erros",
+        url:"https://docs.google.com/spreadsheets/d/18rWJQymEgnQaEl6zLANDVNBtvsXSaoojXjPLsj08mNw/edit?gid=366409654",
+        sheetGid:"366409654", apiHeaders:"", apiAuthToken:"", jsonPath:"",
+        mapping:{data:"Data", produtoSku:"Produto/SKU", pedido:"Pedido", categoria:"Categoria do Erro", responsavel:"Responsável", descricao:"Descrição do Motivo"},
         status:"novo", lastSync:null, lastError:null, rowCount:0, cachedRows:null
       }
     ];
@@ -1484,6 +1507,11 @@ details > summary::-webkit-details-marker{display:none;}
         if (f.key === "tempoMedio" && /tempo/.test(nh)) score = Math.max(score, 60);
         if (f.key === "tempoSep" && /separac/.test(nh)) score = Math.max(score, 80);
         if (f.key === "tempoEmb" && /embalag/.test(nh)) score = Math.max(score, 80);
+        if (f.key === "produtoSku" && /produto|sku/.test(nh)) score = Math.max(score, 80);
+        if (f.key === "pedido" && /pedido/.test(nh)) score = Math.max(score, 80);
+        if (f.key === "categoria" && /categoria/.test(nh)) score = Math.max(score, 80);
+        if (f.key === "responsavel" && /responsav/.test(nh)) score = Math.max(score, 80);
+        if (f.key === "descricao" && /descri|motivo/.test(nh)) score = Math.max(score, 80);
         if (score > bestScore){ bestScore = score; best = h; }
       });
       if (best && bestScore >= 40) mapping[f.key] = best;
@@ -1545,6 +1573,14 @@ details > summary::-webkit-details-marker{display:none;}
       AGENDA_COLETA.length = 0;
       Array.prototype.push.apply(AGENDA_COLETA, nova);
       return {linhas:nova.length, dias:0};
+    }
+    if (targetAba === "erros"){
+      var novosErros = rows.map(function(r){
+        return {data:r.date, produtoSku:r.produtoSku||"", pedido:r.pedido||"", categoria:r.categoria||"", responsavel:r.responsavel||"", descricao:r.descricao||""};
+      }).sort(function(a,b){ return b.data - a.data; });
+      ERROS_OPERACIONAIS.length = 0;
+      Array.prototype.push.apply(ERROS_OPERACIONAIS, novosErros);
+      return {linhas:novosErros.length, dias:0};
     }
     var touched = {};
     rows.forEach(function(r){
@@ -3348,6 +3384,16 @@ details > summary::-webkit-details-marker{display:none;}
         '</section>' +
       '</div>';
 
+    var errosNoPeriodo = ERROS_OPERACIONAIS.filter(function(e){
+      var iso = isoDate(e.data);
+      return iso >= state.dateStart && iso <= state.dateEnd;
+    });
+    var errosRegistradosTable = '<div class="table-wrap"><table><thead><tr><th>Data</th><th>Produto/SKU</th><th>Pedido</th><th>Categoria do Erro</th><th>Responsável</th><th>Descrição do Motivo</th></tr></thead><tbody>' +
+      (errosNoPeriodo.length ? errosNoPeriodo.map(function(e){
+        return '<tr><td class="mono">' + fmtDateBR(isoDate(e.data)) + '</td><td>' + escHtml(e.produtoSku||"—") + '</td><td>' + escHtml(e.pedido||"—") + '</td><td>' + escHtml(e.categoria||"—") + '</td><td>' + escHtml(e.responsavel||"—") + '</td><td>' + escHtml(e.descricao||"—") + '</td></tr>';
+      }).join("") : '<tr><td colspan="6" style="color:var(--ink-3);">Nenhum erro registrado nesse período.</td></tr>') +
+    '</tbody></table></div>';
+
     var errosHtml =
       '<div class="topbar"><div><h1>Outbound · Erros Operacional</h1><p>Erros identificados durante a separação e pedidos que precisaram de retrabalho.</p></div>' + topbarFiltersOut + '</div>' +
       '<div class="content">' +
@@ -3355,6 +3401,14 @@ details > summary::-webkit-details-marker{display:none;}
           '<div class="sector-head"><h2>Qualidade da separação e embalagem</h2><div class="desc">Erros identificados durante a separação e pedidos que precisaram de retrabalho.</div></div>' +
           '<div class="kpi-grid">' + qualKpisOut.join("") + '</div>' +
           '<div class="card">' + qualResumoOut + '</div>' +
+        '</section>' +
+        '<section class="sector">' +
+          '<div class="sector-head"><h2>Erros registrados</h2><div class="desc">Lista de erros da planilha de Erros Operacional, um por linha.</div>' + fonteBadge("erros") + '</div>' +
+          '<div class="card">' +
+          (ERROS_OPERACIONAIS.length
+            ? errosRegistradosTable
+            : '<div class="conn-empty">Nenhum erro sincronizado ainda — vá em Fontes de Dados e conecte a planilha de Erros Operacional.</div>') +
+          '</div>' +
         '</section>' +
       '</div>';
 
@@ -4621,6 +4675,16 @@ details > summary::-webkit-details-marker{display:none;}
       subscribeTable("mip_anexos", function(){ carregarMips().then(render); });
       subscribeTable("full_empresas", function(){ carregarFullEmpresas().then(render); });
       subscribeTable("fulls", function(){ carregarFulls().then(render); });
+      // Sincroniza sozinho, ao abrir a página, as conexões do tipo "planilha
+      // Google" (link público, quase nunca falha) — assim qualquer pessoa
+      // que abra o link já vê os dados reais sem precisar clicar em
+      // "Sincronizar" manualmente. Conexões do tipo "API" (ex.: Recebimento,
+      // que depende do servidor do Glog rodando em localhost) ficam de fora
+      // de propósito — sincronizar sozinho aqui só geraria erro de rede pra
+      // quem não tem esse servidor local.
+      CONNECTIONS.filter(function(c){ return c.tipo === "sheets"; }).forEach(function(conn){
+        doSyncConnection(conn).then(function(){ saveConnections(); render(); });
+      });
     }).catch(function(err){
       console.error("Falha ao carregar dados iniciais:", err);
       document.getElementById("root").innerHTML = '<div style="padding:40px;text-align:center;color:#a33;font-family:sans-serif;">Falha ao carregar dados: ' + (err && err.message ? err.message : err) + '</div>';
