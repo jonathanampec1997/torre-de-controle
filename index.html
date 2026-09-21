@@ -2784,8 +2784,27 @@ details > summary::-webkit-details-marker{display:none;}
   // `glog/`, ou `start-glog.bat`) — mesma limitação já conhecida da
   // conexão "Recebimento — WMS E-ship". Sem ele, mostra um aviso em vez
   // de travar o resto da página.
-  var TINY_OUTBOUND_URL = "http://localhost:3000/api/tiny/outbound-hoje";
   var tinyOutboundFetching = false;
+
+  // Converte a linha do Supabase (snake_case) pro formato que
+  // renderTinyOutboundWidget espera (mesmo shape que a rota /api/tiny/
+  // outbound-hoje sempre devolveu). Ler daqui (em vez de chamar o Glog
+  // direto em localhost) é o que permite qualquer pessoa com o link ver
+  // os mesmos dados — só o Glog, rodando no PC de quem cadastrou o token,
+  // precisa alcançar o Tiny; todo mundo lê o resultado já pronto aqui.
+  function tinyOutboundRowParaWidget(row){
+    return {
+      pendenteTotal: row.pendente_total,
+      pendentePorFormaEnvio: row.pendente_por_forma_envio || {},
+      embaladoTotal: row.embalado_total,
+      embaladoPorFormaEnvio: row.embalado_por_forma_envio || {},
+      embaladoPorEmbalador: row.embalado_por_embalador || {},
+      embaladoSemEmbaladorIdentificado: row.embalado_sem_embalador_identificado || 0,
+      tabelaEmbaladorPorForma: row.tabela_embalador_por_forma || {},
+      aprovadosPorHora: row.aprovados_por_hora || {},
+      atualizadoEm: row.atualizado_em,
+    };
+  }
 
   function tinyOutboundWidgetShell(){
     return '<section class="sector">' +
@@ -2874,15 +2893,14 @@ details > summary::-webkit-details-marker{display:none;}
     if (tinyOutboundFetching) return;
     var el = document.getElementById("tiny-outbound-widget");
     if (!el) return; // não estamos na Visão Geral agora
+    if (!sb) { el.innerHTML = renderTinyOutboundError("Não foi possível conectar ao banco de dados (Supabase)."); return; }
     tinyOutboundFetching = true;
-    fetch(TINY_OUTBOUND_URL, {cache:"no-store"})
-      .then(function(r){
-        if (!r.ok) return r.json().then(function(body){ throw new Error(body && body.error ? body.error : ("HTTP " + r.status)); });
-        return r.json();
-      })
-      .then(function(data){
+    sb.from("tiny_outbound_snapshot").select("*").eq("id", "atual").maybeSingle()
+      .then(function(res){
+        if (res.error) throw new Error(res.error.message);
+        if (!res.data) throw new Error("Ainda sem nenhum dado salvo — aguarde o Glog rodar a primeira consulta.");
         var target = document.getElementById("tiny-outbound-widget");
-        if (target) target.innerHTML = renderTinyOutboundWidget(data);
+        if (target) target.innerHTML = renderTinyOutboundWidget(tinyOutboundRowParaWidget(res.data));
       })
       .catch(function(err){
         var target = document.getElementById("tiny-outbound-widget");
