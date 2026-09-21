@@ -2900,7 +2900,10 @@ details > summary::-webkit-details-marker{display:none;}
         if (res.error) throw new Error(res.error.message);
         if (!res.data) throw new Error("Ainda sem nenhum dado salvo — aguarde o Glog rodar a primeira consulta.");
         var target = document.getElementById("tiny-outbound-widget");
-        if (target) target.innerHTML = renderTinyOutboundWidget(tinyOutboundRowParaWidget(res.data));
+        if (target) {
+          target.innerHTML = renderTinyOutboundWidget(tinyOutboundRowParaWidget(res.data));
+          wireChartTooltips(target);
+        }
       })
       .catch(function(err){
         var target = document.getElementById("tiny-outbound-widget");
@@ -4916,7 +4919,16 @@ details > summary::-webkit-details-marker{display:none;}
     });
 
     // Tooltips for stacked bar / bar charts (payload on hit-rect)
-    root.querySelectorAll(".chart-wrap").forEach(function(wrap){
+    wireChartTooltips(root);
+  }
+
+  // Extraído de wireInteractions() pra poder rewirar só um pedaço do DOM
+  // (ex.: o widget do Tiny, que atualiza sozinho via innerHTML direto e
+  // NUNCA passa por render()/wireInteractions() — sem isso, os gráficos
+  // dele ficavam sem tooltip no hover, porque os listeners só eram
+  // criados durante o render() da página inteira).
+  function wireChartTooltips(container){
+    container.querySelectorAll(".chart-wrap").forEach(function(wrap){
       var svg = wrap.querySelector("svg");
       var tip = wrap.querySelector(".tooltip");
       if (!svg || !tip) return;
