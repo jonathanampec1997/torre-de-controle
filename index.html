@@ -2765,7 +2765,135 @@ details > summary::-webkit-details-marker{display:none;}
           '</button>' +
         '</div>' +
       '</section>' +
+      tinyOutboundWidgetShell() +
     '</div>';
+  }
+
+  /* ==================== TINY OUTBOUND WIDGET (ao vivo, Visão Geral) ==================== */
+  // Widget separado do resto da Visão Geral, de propósito: busca direto do
+  // backend do Glog (`http://localhost:3000/api/tiny/outbound-hoje`, ver
+  // `glog/src/lib/tiny.ts` + `tiny-outbound-snapshot.ts`) e se atualiza
+  // sozinho a cada 5min — SEM passar pelo render()/state global. Motivo:
+  // render() reconstrói o DOM inteiro (ver convenções no HANDOFF), o que
+  // perderia foco de qualquer campo de texto que o usuário esteja
+  // preenchendo em outro lugar da tela no momento em que o refresh de
+  // 5min disparasse. Igual à exceção já existente da busca de SKU
+  // (`data-sku-filter`): manipula o DOM direto, nunca chama render().
+  //
+  // Depende do servidor do Glog rodando local (`npm run dev` dentro de
+  // `glog/`, ou `start-glog.bat`) — mesma limitação já conhecida da
+  // conexão "Recebimento — WMS E-ship". Sem ele, mostra um aviso em vez
+  // de travar o resto da página.
+  var TINY_OUTBOUND_URL = "http://localhost:3000/api/tiny/outbound-hoje";
+  var tinyOutboundFetching = false;
+
+  function tinyOutboundWidgetShell(){
+    return '<section class="sector">' +
+      '<div class="sector-head"><h2>Outbound — Tiny ERP (hoje, ao vivo)</h2>' +
+        '<div class="desc">Fila atual pra embalar e embalados de hoje, direto do Tiny — atualiza sozinho a cada poucos minutos. Depende do Glog rodando local.</div>' +
+      '</div>' +
+      '<div id="tiny-outbound-widget"><div class="banner-demo">Carregando dados do Tiny…</div></div>' +
+    '</section>';
+  }
+
+  function renderTinyOutboundError(msg){
+    return '<div class="banner-demo" style="border-color:var(--status-critical); color:var(--status-critical);">' +
+      '⚠ Não consegui buscar dados do Tiny agora: ' + escHtml(msg) + '. ' +
+      'Confira se o servidor do Glog está rodando (<code>start-glog.bat</code>, ou <code>npm run dev</code> dentro de <code>glog/</code>).' +
+    '</div>';
+  }
+
+  function tinyBarList(map){
+    var entries = Object.keys(map).map(function(k){ return [k, map[k]]; }).sort(function(a,b){ return b[1]-a[1]; });
+    if (!entries.length) return '<p style="color:var(--ink-3); font-size:.85rem;">Nenhum pedido.</p>';
+    var max = Math.max.apply(null, entries.map(function(e){ return e[1]; }));
+    return entries.map(function(e){
+      var pct = max ? (e[1]/max*100) : 0;
+      return '<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">' +
+        '<div style="width:150px; flex-shrink:0; font-size:.8rem; color:var(--ink-2);">' + escHtml(e[0]) + '</div>' +
+        '<div style="flex:1; height:8px; border-radius:4px; background:var(--surface-2); overflow:hidden;">' +
+          '<div style="height:100%; width:' + pct.toFixed(0) + '%; background:var(--accent); border-radius:4px;"></div>' +
+        '</div>' +
+        '<div style="width:48px; text-align:right; font-family:\'IBM Plex Mono\',monospace; font-size:.8rem;">' + fmtInt(e[1]) + '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  function renderTinyOutboundWidget(d){
+    var kpis = [
+      snapshotCard("Pedidos a embalar (fila atual)", fmtInt(d.pendenteTotal), "", "independente de quando o pedido foi criado"),
+      snapshotCard("Pedidos embalados hoje", fmtInt(d.embaladoTotal), "", "atualizado às " + new Date(d.atualizadoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}))
+    ];
+
+    var embaladorNota = d.embaladoSemEmbaladorIdentificado > 0
+      ? '<p style="color:var(--ink-3); font-size:.78rem; margin-top:6px;">' + fmtInt(d.embaladoSemEmbaladorIdentificado) + ' pedido(s) ainda sem embalador identificado (completando aos poucos a cada atualização).</p>'
+      : "";
+
+    var formasTabela = (function(){
+      var formas = {};
+      Object.keys(d.embaladoPorFormaEnvio).forEach(function(f){ formas[f] = 1; });
+      Object.keys(d.tabelaEmbaladorPorForma).forEach(function(emb){
+        Object.keys(d.tabelaEmbaladorPorForma[emb]).forEach(function(f){ formas[f] = 1; });
+      });
+      var formaList = Object.keys(formas).sort();
+      var embaladores = Object.keys(d.embaladoPorEmbalador).sort(function(a,b){ return d.embaladoPorEmbalador[b]-d.embaladoPorEmbalador[a]; });
+      if (!embaladores.length || !formaList.length) return "";
+      var header = '<tr><th>Embalador</th>' + formaList.map(function(f){ return '<th class="num">' + escHtml(f) + '</th>'; }).join("") + '<th class="num">Total</th></tr>';
+      var rows = embaladores.map(function(emb){
+        var linha = d.tabelaEmbaladorPorForma[emb] || {};
+        var cells = formaList.map(function(f){ return '<td class="num">' + fmtInt(linha[f]||0) + '</td>'; }).join("");
+        return '<tr><td>' + escHtml(emb) + '</td>' + cells + '<td class="num"><strong>' + fmtInt(d.embaladoPorEmbalador[emb]) + '</strong></td></tr>';
+      }).join("");
+      return '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Embalados hoje — embalador × forma de envio</div></div>' +
+        '<div class="table-wrap"><table><thead>' + header + '</thead><tbody>' + rows + '</tbody></table></div></div>';
+    })();
+
+    var horas = [];
+    for (var h = 0; h < 24; h++) horas.push(h);
+    var matrizAprovados = [horas.map(function(h2){ return d.aprovadosPorHora[String(h2)] || 0; })];
+    var temAprovados = matrizAprovados[0].some(function(v){ return v > 0; });
+
+    return '' +
+      '<div class="kpi-grid">' + kpis.join("") + '</div>' +
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
+        '<div class="card"><div class="card-head"><div class="card-title">A embalar por forma de envio</div></div>' + tinyBarList(d.pendentePorFormaEnvio) + '</div>' +
+        '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por forma de envio</div></div>' + tinyBarList(d.embaladoPorFormaEnvio) + '</div>' +
+      '</div>' +
+      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Embalados hoje por usuário</div></div>' +
+        tinyBarList(d.embaladoPorEmbalador) + embaladorNota +
+      '</div>' +
+      formasTabela +
+      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Horário de pico de aprovação</div><div class="desc">Quantos pedidos foram aprovados a cada hora, acumulado desde a primeira consulta de hoje.</div></div>' +
+        (temAprovados
+          ? heatmapChart("tiny-aprovados-hora", matrizAprovados, horas, ["Hoje"]) + heatmapLegend()
+          : '<p style="color:var(--ink-3); font-size:.85rem;">Ainda sem dados suficientes — precisa de pelo menos 2 consultas (uns 5min) pra calcular a diferença.</p>') +
+      '</div>';
+  }
+
+  function refreshTinyOutbound(){
+    if (tinyOutboundFetching) return;
+    var el = document.getElementById("tiny-outbound-widget");
+    if (!el) return; // não estamos na Visão Geral agora
+    tinyOutboundFetching = true;
+    fetch(TINY_OUTBOUND_URL, {cache:"no-store"})
+      .then(function(r){
+        if (!r.ok) return r.json().then(function(body){ throw new Error(body && body.error ? body.error : ("HTTP " + r.status)); });
+        return r.json();
+      })
+      .then(function(data){
+        var target = document.getElementById("tiny-outbound-widget");
+        if (target) target.innerHTML = renderTinyOutboundWidget(data);
+      })
+      .catch(function(err){
+        var target = document.getElementById("tiny-outbound-widget");
+        if (target) target.innerHTML = renderTinyOutboundError(err && err.message ? err.message : String(err));
+      })
+      .then(function(){ tinyOutboundFetching = false; }, function(){ tinyOutboundFetching = false; });
+  }
+
+  if (!window.__tinyOutboundIntervalStarted){
+    window.__tinyOutboundIntervalStarted = true;
+    setInterval(refreshTinyOutbound, 5*60*1000);
   }
 
   /* ============================ PAGE: INBOUND ============================ */
@@ -3967,6 +4095,7 @@ details > summary::-webkit-details-marker{display:none;}
     else pageHtml = pageFontes();
     root.innerHTML = '<div class="app">' + sidebarHtml() + '<div class="main">' + pageHtml + '</div></div>';
     wireInteractions();
+    if (state.page === "geral") refreshTinyOutbound();
     if (state.fullHighlight !== null){
       var hlId = state.fullHighlight;
       var hlTarget = root.querySelector('[data-full-card="' + hlId + '"]');
