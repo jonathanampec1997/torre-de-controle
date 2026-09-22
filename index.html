@@ -2177,7 +2177,8 @@ try {
     ];
     var rootItemsBottom = [
       {id:"insumos", ic:"◇", label:"Insumos"},
-      {id:"fontes", ic:"⇄", label:"Fontes de Dados"}
+      {id:"fontes", ic:"⇄", label:"Fontes de Dados"},
+      {id:"configuracoes", ic:"⚙", label:"Configurações"}
     ];
     var ajudaGroup = {id:"ajuda", ic:"", label:"Ajuda"};
 
@@ -2408,6 +2409,14 @@ try {
       warning +
       listCard +
       formCard +
+    '</section>';
+  }
+
+  /* ============================ PAGE: CONFIGURAÇÕES ============================ */
+
+  function pageConfiguracoes(){
+    return '<section class="sector">' +
+      '<div class="sector-head"><h2>Configurações</h2><div class="desc">Parâmetros operacionais da Torre de Controle.</div></div>' +
       tinyHorariosConfigCard() +
     '</section>';
   }
@@ -4417,6 +4426,7 @@ try {
     else if (state.page === "fulfillment") pageHtml = pageFulfillment();
     else if (state.page === "ajuda") pageHtml = pageAjuda();
     else if (state.page === "insumos") pageHtml = pageInsumos();
+    else if (state.page === "configuracoes") pageHtml = pageConfiguracoes();
     else pageHtml = pageFontes();
     root.innerHTML = '<div class="app">' + sidebarHtml() + '<div class="main">' + pageHtml + '</div></div>';
     wireInteractions();
