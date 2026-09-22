@@ -2801,7 +2801,8 @@ details > summary::-webkit-details-marker{display:none;}
       embaladoPorEmbalador: row.embalado_por_embalador || {},
       embaladoSemEmbaladorIdentificado: row.embalado_sem_embalador_identificado || 0,
       tabelaEmbaladorPorForma: row.tabela_embalador_por_forma || {},
-      aprovadosPorHora: row.aprovados_por_hora || {},
+      aprovadosPorHoraPR: row.aprovados_por_hora_pr || {},
+      aprovadosPorHoraEDN: row.aprovados_por_hora_edn || {},
       atualizadoEm: row.atualizado_em,
     };
   }
@@ -2869,8 +2870,12 @@ details > summary::-webkit-details-marker{display:none;}
 
     var horas = [];
     for (var h = 0; h < 24; h++) horas.push(h);
-    var matrizAprovados = [horas.map(function(h2){ return d.aprovadosPorHora[String(h2)] || 0; })];
-    var temAprovados = matrizAprovados[0].some(function(v){ return v > 0; });
+    function matrizDe(porHora){ return [horas.map(function(h2){ return porHora[String(h2)] || 0; })]; }
+    var matrizPR = matrizDe(d.aprovadosPorHoraPR);
+    var matrizEDN = matrizDe(d.aprovadosPorHoraEDN);
+    var temAprovadosPR = matrizPR[0].some(function(v){ return v > 0; });
+    var temAprovadosEDN = matrizEDN[0].some(function(v){ return v > 0; });
+    var semDadosMsg = '<p style="color:var(--ink-3); font-size:.85rem;">Ainda sem dados suficientes — precisa de pelo menos 2 consultas (uns 5min) pra calcular a diferença.</p>';
 
     return '' +
       '<div class="kpi-grid">' + kpis.join("") + '</div>' +
@@ -2882,10 +2887,15 @@ details > summary::-webkit-details-marker{display:none;}
         tinyBarList(d.embaladoPorEmbalador) + embaladorNota +
       '</div>' +
       formasTabela +
-      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Horário de pico de aprovação</div><div class="desc">Quantos pedidos foram aprovados a cada hora, acumulado desde a primeira consulta de hoje.</div></div>' +
-        (temAprovados
-          ? heatmapChart("tiny-aprovados-hora", matrizAprovados, horas, ["Hoje"]) + heatmapLegend()
-          : '<p style="color:var(--ink-3); font-size:.85rem;">Ainda sem dados suficientes — precisa de pelo menos 2 consultas (uns 5min) pra calcular a diferença.</p>') +
+      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Horário de pico de aprovação — Ampec PR</div><div class="desc">Quantos pedidos foram aprovados a cada hora, acumulado desde a primeira consulta de hoje.</div></div>' +
+        (temAprovadosPR
+          ? heatmapChart("tiny-aprovados-hora-pr", matrizPR, horas, ["Hoje"]) + heatmapLegend()
+          : semDadosMsg) +
+      '</div>' +
+      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Horário de pico de aprovação — Ampec SC EDN</div><div class="desc">Quantos pedidos foram aprovados a cada hora, acumulado desde a primeira consulta de hoje.</div></div>' +
+        (temAprovadosEDN
+          ? heatmapChart("tiny-aprovados-hora-edn", matrizEDN, horas, ["Hoje"]) + heatmapLegend()
+          : semDadosMsg) +
       '</div>';
   }
 
