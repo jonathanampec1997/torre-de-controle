@@ -3075,7 +3075,19 @@ try {
   // hora atual (sem mostrar as horas "mortas" antes de começar a embalar).
   function tinyBucketsEmbaladosPorHora(embaladosPorHora, primeiroEmbaladoEmIso){
     var horaFim = new Date().getHours();
-    var horaInicio = primeiroEmbaladoEmIso ? new Date(primeiroEmbaladoEmIso).getHours() : horaFim;
+    var horaInicio;
+    if (primeiroEmbaladoEmIso) {
+      horaInicio = new Date(primeiroEmbaladoEmIso).getHours();
+    } else {
+      // Sem primeiro embalado confiável ainda (ver bug do "restart no meio
+      // do dia", Rodada 34) — em vez de colapsar pra só a hora atual
+      // (escondendo horas que JÁ foram capturadas de verdade pelo
+      // diff a cada 5min), usa a hora mais antiga que já existe no
+      // próprio embaladosPorHora como início.
+      var chaves = Object.keys(embaladosPorHora).map(Number);
+      horaInicio = chaves.length ? Math.min.apply(null, chaves) : horaFim;
+    }
+    if (horaInicio > horaFim) horaInicio = horaFim;
     var buckets = [];
     for (var h = horaInicio; h <= horaFim; h++){
       buckets.push({ label: h + "h", value: embaladosPorHora[String(h)] || 0 });
