@@ -2924,25 +2924,6 @@ try {
     return alvo;
   }
 
-  // Próxima ocorrência a partir de agora (hoje se ainda não passou, senão
-  // procura nos próximos dias) — usado no cronômetro, que sempre conta pra
-  // frente.
-  function tinyProximaOcorrencia(empresa, forma, tipo){
-    if (!tinyHorarios) return null;
-    var agora = new Date();
-    for (var i = 0; i <= 7; i++){
-      var dia = new Date(agora); dia.setDate(dia.getDate()+i); dia.setHours(0,0,0,0);
-      var cfg = ((tinyHorarios[empresa]||{})[forma]||{})[dia.getDay()];
-      if (cfg && cfg[tipo]){
-        var hora = tinyParseHora(cfg[tipo]);
-        var alvo = new Date(dia);
-        alvo.setHours(hora.h, hora.m, 0, 0);
-        if (alvo.getTime() > agora.getTime()) return alvo;
-      }
-    }
-    return null;
-  }
-
   // Ritmo atual = total embalado hoje ÷ horas desde o PRIMEIRO embalado de
   // hoje (não desde meia-noite — pedido do dono: refletir desde quando o
   // time realmente começou a embalar). Sem primeiro embalado ainda
@@ -3115,12 +3096,13 @@ try {
 
   function tinyCronometroCard(){
     return '<div class="card" style="margin-top:16px;">' +
-      '<div class="card-head"><div class="card-title">Cronômetro da próxima coleta</div></div>' +
+      '<div class="card-head"><div class="card-title">Cronômetro da coleta de hoje</div><div class="desc">Conta só dentro do dia — quando bater o horário da coleta, trava em zero e avisa se ainda falta pedido.</div></div>' +
       '<div style="display:flex; gap:28px; flex-wrap:wrap; margin-top:2px;">' +
         TINY_CRONOMETRO_ALVOS.map(function(a){
           return '<div><div style="font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3);">' + a.label + '</div>' +
             '<div class="mono" id="tiny-cronometro-' + a.chave + '" style="font-size:1.5rem; font-weight:700;">--:--:--</div>' +
-            '<div style="font-size:.7rem; color:var(--ink-3);" id="tiny-cronometro-' + a.chave + '-data">&nbsp;</div></div>';
+            '<div style="font-size:.7rem; color:var(--ink-3);" id="tiny-cronometro-' + a.chave + '-data">&nbsp;</div>' +
+            '<div style="font-size:.75rem; font-weight:700; margin-top:2px;" id="tiny-cronometro-' + a.chave + '-status">&nbsp;</div></div>';
         }).join("") +
       '</div>' +
     '</div>';
@@ -3130,16 +3112,44 @@ try {
     TINY_CRONOMETRO_ALVOS.forEach(function(a){
       var elValor = document.getElementById("tiny-cronometro-" + a.chave);
       if (!elValor) return; // widget não montado agora (outra página)
-      var alvo = tinyProximaOcorrencia(a.empresa, a.forma, "horario_coleta");
       var elData = document.getElementById("tiny-cronometro-" + a.chave + "-data");
-      if (!alvo){
+      var elStatus = document.getElementById("tiny-cronometro-" + a.chave + "-status");
+
+      // Só a coleta DE HOJE — não rola pro dia seguinte sozinho. Quando o
+      // dia virar (00h), "hoje" já passa a ser o novo dia automaticamente
+      // (tinyHorarioDeHoje sempre lê o dia da semana atual).
+      var alvoHoje = tinyHorarioDeHoje(a.empresa, a.forma, "horario_coleta");
+      if (!alvoHoje){
         elValor.textContent = "—";
-        if (elData) elData.textContent = tinyHorarios ? "Nenhuma coleta configurada" : "Carregando…";
+        elValor.style.color = "var(--ink)";
+        if (elData) elData.textContent = tinyHorarios ? "Nenhuma coleta configurada hoje" : "Carregando…";
+        if (elStatus) elStatus.textContent = "";
         return;
       }
-      elValor.textContent = tinyFmtContagem(alvo.getTime() - Date.now());
+
       if (elData) {
-        elData.textContent = "Coleta: " + alvo.toLocaleDateString("pt-BR",{weekday:"long", day:"2-digit", month:"2-digit"}) + " às " + alvo.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+        elData.textContent = "Coleta hoje às " + alvoHoje.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+      }
+
+      var jaPassou = alvoHoje.getTime() <= Date.now();
+      if (!jaPassou){
+        elValor.textContent = tinyFmtContagem(alvoHoje.getTime() - Date.now());
+        elValor.style.color = "var(--ink)";
+        if (elStatus) elStatus.textContent = "";
+        return;
+      }
+
+      // Coleta de hoje já bateu — trava em zero e avisa se sobrou pedido.
+      elValor.textContent = "00:00:00";
+      var chaveTiny = TINY_FORMA_NOME_TINY[a.forma];
+      var pendentePorForma = (tinyUltimoSnapshot && (a.empresa === "PR" ? tinyUltimoSnapshot.pendentePorFormaEnvioPR : tinyUltimoSnapshot.pendentePorFormaEnvioEDN)) || {};
+      var pendente = pendentePorForma[chaveTiny] || 0;
+      if (pendente <= 0){
+        elValor.style.color = "var(--status-good)";
+        if (elStatus) { elStatus.style.color = "var(--status-good)"; elStatus.textContent = "🎉 Parabéns, todos os pedidos prontos!"; }
+      } else {
+        elValor.style.color = "var(--status-critical)";
+        if (elStatus) { elStatus.style.color = "var(--status-critical)"; elStatus.textContent = "⚠ Cuidado, ainda " + (pendente === 1 ? "falta 1 pedido" : "faltam " + fmtInt(pendente) + " pedidos") + " para embalar."; }
       }
     });
   }
