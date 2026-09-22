@@ -2408,6 +2408,7 @@ try {
       warning +
       listCard +
       formCard +
+      tinyHorariosConfigCard() +
     '</section>';
   }
 
@@ -2838,8 +2839,255 @@ try {
       tabelaEmbaladorPorForma: row.tabela_embalador_por_forma || {},
       aprovadosPorHoraPR: row.aprovados_por_hora_pr || {},
       aprovadosPorHoraEDN: row.aprovados_por_hora_edn || {},
+      pendenteTotalPR: row.pendente_total_pr || 0,
+      pendenteTotalEDN: row.pendente_total_edn || 0,
+      embaladoTotalPR: row.embalado_total_pr || 0,
+      embaladoTotalEDN: row.embalado_total_edn || 0,
+      pendentePorFormaEnvioPR: row.pendente_por_forma_envio_pr || {},
+      pendentePorFormaEnvioEDN: row.pendente_por_forma_envio_edn || {},
+      embaladoPorFormaEnvioPR: row.embalado_por_forma_envio_pr || {},
+      embaladoPorFormaEnvioEDN: row.embalado_por_forma_envio_edn || {},
       atualizadoEm: row.atualizado_em,
     };
+  }
+
+  /* ---- Ritmo (pedidos/h), projeção até o corte e cronômetro de coleta —
+     corte/coleta configurados por empresa, FORMA DE ENVIO e dia da semana
+     em tiny_horarios_corte_coleta (Supabase). Config editável fica em
+     Fontes de Dados (pageFontes) — aqui só consome os horários já
+     carregados. Ampec PR tem corte/coleta próprios pra Mercado Livre e pra
+     Shopee (diferentes um do outro); Ampec SC EDN só vende Mercado
+     Livre. ---- */
+  var DIAS_SEMANA_NOMES = ["Domingo","Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira","Sexta-feira","Sábado"];
+  var TINY_EMPRESA_FORMAS = { PR: ["mercado_livre","shopee"], EDN: ["mercado_livre"] };
+  var TINY_FORMA_NOME_TINY = { mercado_livre: "Mercado Envios", shopee: "Shopee Envios" };
+  var TINY_FORMA_NOME_EXIBICAO = { mercado_livre: "Mercado Livre", shopee: "Shopee" };
+  var tinyHorarios = null; // {PR:{mercado_livre:{0:{horario_corte,horario_coleta},...}, shopee:{...}}, EDN:{mercado_livre:{...}}}
+  var tinyUltimoSnapshot = null;
+
+  function tinyHorariosVazios(){
+    return {
+      PR: { mercado_livre: {}, shopee: {} },
+      EDN: { mercado_livre: {}, shopee: {} },
+    };
+  }
+
+  function carregarTinyHorarios(){
+    if (!sb) return Promise.resolve();
+    return sb.from("tiny_horarios_corte_coleta").select("*").then(function(res){
+      if (res.error) { console.error("Falha ao carregar horários de corte/coleta:", res.error); return; }
+      var lookup = tinyHorariosVazios();
+      (res.data||[]).forEach(function(row){
+        lookup[row.empresa][row.forma][row.dia_semana] = { horario_corte: row.horario_corte, horario_coleta: row.horario_coleta };
+      });
+      tinyHorarios = lookup;
+      // Se o widget já estava montado com dados, redesenha só com os
+      // horários novos — sem precisar esperar o próximo ciclo de 5min.
+      var target = document.getElementById("tiny-outbound-widget");
+      if (target && tinyUltimoSnapshot) {
+        target.innerHTML = renderTinyOutboundWidget(tinyUltimoSnapshot);
+        wireChartTooltips(target);
+        tinyTickCronometro();
+      }
+    });
+  }
+  carregarTinyHorarios();
+
+  function tinyParseHora(hhmmss){
+    var partes = String(hhmmss).split(":");
+    return { h: parseInt(partes[0],10)||0, m: parseInt(partes[1],10)||0 };
+  }
+
+  // Horário (corte OU coleta) configurado especificamente pra HOJE — usado
+  // nos cards de ritmo/projeção, que querem o prazo de hoje mesmo que já
+  // tenha passado (aí mostram aviso em vez de rolar pro dia seguinte).
+  function tinyHorarioDeHoje(empresa, forma, tipo){
+    if (!tinyHorarios) return null;
+    var cfg = ((tinyHorarios[empresa]||{})[forma]||{})[new Date().getDay()];
+    if (!cfg || !cfg[tipo]) return null;
+    var hora = tinyParseHora(cfg[tipo]);
+    var alvo = new Date();
+    alvo.setHours(hora.h, hora.m, 0, 0);
+    return alvo;
+  }
+
+  // Próxima ocorrência a partir de agora (hoje se ainda não passou, senão
+  // procura nos próximos dias) — usado no cronômetro, que sempre conta pra
+  // frente.
+  function tinyProximaOcorrencia(empresa, forma, tipo){
+    if (!tinyHorarios) return null;
+    var agora = new Date();
+    for (var i = 0; i <= 7; i++){
+      var dia = new Date(agora); dia.setDate(dia.getDate()+i); dia.setHours(0,0,0,0);
+      var cfg = ((tinyHorarios[empresa]||{})[forma]||{})[dia.getDay()];
+      if (cfg && cfg[tipo]){
+        var hora = tinyParseHora(cfg[tipo]);
+        var alvo = new Date(dia);
+        alvo.setHours(hora.h, hora.m, 0, 0);
+        if (alvo.getTime() > agora.getTime()) return alvo;
+      }
+    }
+    return null;
+  }
+
+  function tinyRitmoAtual(embaladoHoje){
+    var agora = new Date();
+    var meiaNoite = new Date(agora); meiaNoite.setHours(0,0,0,0);
+    var horas = Math.max((agora.getTime()-meiaNoite.getTime())/3600000, 1/60);
+    return embaladoHoje/horas;
+  }
+
+  function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma){
+    var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
+    var embalado = embaladoPorForma[chaveTiny] || 0;
+    var pendente = pendentePorForma[chaveTiny] || 0;
+    var atual = tinyRitmoAtual(embalado);
+    var alvoColeta = tinyHorarioDeHoje(empresaKey, formaKey, "horario_coleta");
+    var necessarioNum = null, necessarioTxt;
+    if (!tinyHorarios) necessarioTxt = "Carregando…";
+    else if (!alvoColeta) necessarioTxt = "Sem coleta configurada hoje";
+    else if (alvoColeta.getTime() <= Date.now()) necessarioTxt = "Coleta de hoje já passou";
+    else {
+      var horasRestantes = (alvoColeta.getTime()-Date.now())/3600000;
+      necessarioNum = pendente/horasRestantes;
+      necessarioTxt = fmtDec(necessarioNum,1) + " /h";
+    }
+    var cor = necessarioNum !== null ? (atual >= necessarioNum ? "var(--status-good)" : "var(--status-critical)") : "var(--ink)";
+    return '<div style="flex:1 1 190px; min-width:170px;">' +
+      '<div style="font-size:.74rem; font-weight:700; color:var(--ink-2); margin-bottom:4px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
+      '<div style="display:flex; gap:18px; flex-wrap:wrap;">' +
+        '<div><div style="font-size:.64rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Ritmo atual</div>' +
+          '<div class="mono" style="font-size:1.25rem; font-weight:700; color:' + cor + ';">' + fmtDec(atual,1) + '<span style="font-size:.68rem; font-weight:500; color:var(--ink-3);"> /h</span></div></div>' +
+        '<div><div style="font-size:.64rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Necessário</div>' +
+          '<div class="mono" style="font-size:1.25rem; font-weight:700;">' + necessarioTxt + '</div></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function tinyRitmoCard(empresaKey, nomeEmpresa, embaladoPorForma, pendentePorForma){
+    return '<div class="card">' +
+      '<div class="card-head"><div class="card-title">Ritmo atual — ' + nomeEmpresa + '</div><div class="desc">Pedidos por hora saindo agora vs. quanto precisaria pra terminar até a coleta de hoje.</div></div>' +
+      '<div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:4px;">' +
+        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaRitmo(empresaKey, f, embaladoPorForma, pendentePorForma); }).join("") +
+      '</div>' +
+    '</div>';
+  }
+
+  // Projeção até o corte: no ritmo atual (pedidos/h de hoje), quantos
+  // pedidos A MAIS devem sair até o horário de corte — uma estimativa
+  // simples pra saber se dá tempo de "abrir mais uma leva" ou não.
+  function tinyLinhaProjecao(empresaKey, formaKey, embaladoPorForma){
+    var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
+    var embalado = embaladoPorForma[chaveTiny] || 0;
+    var atual = tinyRitmoAtual(embalado);
+    var alvoCorte = tinyHorarioDeHoje(empresaKey, formaKey, "horario_corte");
+    var txt;
+    if (!tinyHorarios) txt = "Carregando…";
+    else if (!alvoCorte) txt = "Sem corte configurado hoje";
+    else if (alvoCorte.getTime() <= Date.now()) txt = "Corte de hoje já passou";
+    else {
+      var horasRestantes = (alvoCorte.getTime()-Date.now())/3600000;
+      txt = "+" + fmtInt(Math.round(atual*horasRestantes)) + " pedidos até o corte";
+    }
+    return '<div style="flex:1 1 190px; min-width:170px;">' +
+      '<div style="font-size:.74rem; font-weight:700; color:var(--ink-2); margin-bottom:4px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
+      '<div class="mono" style="font-size:1.15rem; font-weight:700;">' + txt + '</div>' +
+    '</div>';
+  }
+
+  function tinyProjecaoCard(empresaKey, nomeEmpresa, embaladoPorForma){
+    return '<div class="card">' +
+      '<div class="card-head"><div class="card-title">Projeção até o corte — ' + nomeEmpresa + '</div><div class="desc">Estimativa de quantos pedidos ainda devem sair até o corte, mantido o ritmo atual.</div></div>' +
+      '<div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:4px;">' +
+        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaProjecao(empresaKey, f, embaladoPorForma); }).join("") +
+      '</div>' +
+    '</div>';
+  }
+
+  function tinyFmtContagem(ms){
+    if (ms == null) return "—";
+    if (ms < 0) ms = 0;
+    var totalSeg = Math.floor(ms/1000);
+    var h = Math.floor(totalSeg/3600);
+    var m = Math.floor((totalSeg%3600)/60);
+    var s = totalSeg%60;
+    return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+  }
+
+  var TINY_CRONOMETRO_ALVOS = [
+    {empresa:"PR", forma:"mercado_livre", chave:"pr-ml", label:"Ampec PR — Mercado Livre"},
+    {empresa:"PR", forma:"shopee", chave:"pr-shopee", label:"Ampec PR — Shopee"},
+    {empresa:"EDN", forma:"mercado_livre", chave:"edn-ml", label:"Ampec SC EDN — Mercado Livre"},
+  ];
+
+  function tinyCronometroCard(){
+    return '<div class="card" style="margin-top:16px;">' +
+      '<div class="card-head"><div class="card-title">Cronômetro da próxima coleta</div></div>' +
+      '<div style="display:flex; gap:28px; flex-wrap:wrap; margin-top:2px;">' +
+        TINY_CRONOMETRO_ALVOS.map(function(a){
+          return '<div><div style="font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3);">' + a.label + '</div>' +
+            '<div class="mono" id="tiny-cronometro-' + a.chave + '" style="font-size:1.5rem; font-weight:700;">--:--:--</div>' +
+            '<div style="font-size:.7rem; color:var(--ink-3);" id="tiny-cronometro-' + a.chave + '-data">&nbsp;</div></div>';
+        }).join("") +
+      '</div>' +
+    '</div>';
+  }
+
+  function tinyTickCronometro(){
+    TINY_CRONOMETRO_ALVOS.forEach(function(a){
+      var elValor = document.getElementById("tiny-cronometro-" + a.chave);
+      if (!elValor) return; // widget não montado agora (outra página)
+      var alvo = tinyProximaOcorrencia(a.empresa, a.forma, "horario_coleta");
+      var elData = document.getElementById("tiny-cronometro-" + a.chave + "-data");
+      if (!alvo){
+        elValor.textContent = "—";
+        if (elData) elData.textContent = tinyHorarios ? "Nenhuma coleta configurada" : "Carregando…";
+        return;
+      }
+      elValor.textContent = tinyFmtContagem(alvo.getTime() - Date.now());
+      if (elData) {
+        elData.textContent = "Coleta: " + alvo.toLocaleDateString("pt-BR",{weekday:"long", day:"2-digit", month:"2-digit"}) + " às " + alvo.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+      }
+    });
+  }
+  if (!window.__tinyCronometroTickStarted){
+    window.__tinyCronometroTickStarted = true;
+    setInterval(tinyTickCronometro, 1000);
+  }
+
+  // Card de configuração dos horários — vive em Fontes de Dados (menu de
+  // configurações), não dentro do widget da Visão Geral. Edita a mesma
+  // tabela (tiny_horarios_corte_coleta) que tinyHorarios já carrega.
+  function tinyHorariosConfigCard(){
+    function tabelaEmpresa(empresaKey, nomeEmpresa){
+      var formas = TINY_EMPRESA_FORMAS[empresaKey];
+      var header = '<tr><th>Dia</th>' + formas.map(function(f){
+        return '<th>Corte — ' + TINY_FORMA_NOME_EXIBICAO[f] + '</th><th>Coleta — ' + TINY_FORMA_NOME_EXIBICAO[f] + '</th>';
+      }).join("") + '</tr>';
+      var linhas = DIAS_SEMANA_NOMES.map(function(nome, idx){
+        var celulas = formas.map(function(f){
+          var cfg = (tinyHorarios && tinyHorarios[empresaKey] && tinyHorarios[empresaKey][f] && tinyHorarios[empresaKey][f][idx]) || {};
+          var corte = cfg.horario_corte ? cfg.horario_corte.slice(0,5) : "";
+          var coleta = cfg.horario_coleta ? cfg.horario_coleta.slice(0,5) : "";
+          return '<td><input type="time" class="date-input" data-horario="corte" data-empresa="' + empresaKey + '" data-forma="' + f + '" data-dia="' + idx + '" value="' + corte + '"></td>' +
+            '<td><input type="time" class="date-input" data-horario="coleta" data-empresa="' + empresaKey + '" data-forma="' + f + '" data-dia="' + idx + '" value="' + coleta + '"></td>';
+        }).join("");
+        return '<tr><td>' + nome + '</td>' + celulas + '</tr>';
+      }).join("");
+      return '<div class="table-wrap" style="margin-top:12px;"><strong style="font-size:.85rem;">' + nomeEmpresa + '</strong>' +
+        '<table><thead>' + header + '</thead><tbody>' + linhas + '</tbody></table></div>';
+    }
+
+    return '<div class="card">' +
+      '<div class="card-head"><span class="card-title">Horários de corte e coleta — Outbound Tiny</span></div>' +
+      '<div class="desc">Por empresa, forma de envio e dia da semana — vale a partir de hoje, repete toda semana. Alimenta os cards de ritmo, projeção e o cronômetro na Visão Geral.</div>' +
+      (tinyHorarios ? "" : '<p style="color:var(--ink-3); font-size:.85rem; margin-top:8px;">Carregando horários…</p>') +
+      tabelaEmpresa("PR","Ampec PR") + tabelaEmpresa("EDN","Ampec SC EDN") +
+      '<div class="btn-row" style="margin-top:14px;">' +
+        '<button class="btn-primary" data-horarios-salvar ' + (!sb?"disabled":"") + '>Salvar horários</button>' +
+        '<span id="tiny-horarios-status" style="font-size:.8rem; color:var(--ink-3);"></span>' +
+      '</div>' +
+    '</div>';
   }
 
   function tinyOutboundWidgetShell(){
@@ -2915,6 +3163,14 @@ try {
     return '' +
       '<div class="kpi-grid">' + kpis.join("") + '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
+        tinyRitmoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.pendentePorFormaEnvioPR) +
+        tinyRitmoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.pendentePorFormaEnvioEDN) +
+      '</div>' +
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
+        tinyProjecaoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR) +
+        tinyProjecaoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN) +
+      '</div>' +
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
         '<div class="card"><div class="card-head"><div class="card-title">A embalar por forma de envio</div></div>' + tinyBarList(d.pendentePorFormaEnvio) + '</div>' +
         '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por forma de envio</div></div>' + tinyBarList(d.embaladoPorFormaEnvio) + '</div>' +
       '</div>' +
@@ -2931,7 +3187,8 @@ try {
         (temAprovadosEDN
           ? heatmapChart("tiny-aprovados-hora-edn", matrizEDN, horas, ["Hoje"]) + heatmapLegend()
           : semDadosMsg) +
-      '</div>';
+      '</div>' +
+      tinyCronometroCard();
   }
 
   function refreshTinyOutbound(){
@@ -2944,10 +3201,12 @@ try {
       .then(function(res){
         if (res.error) throw new Error(res.error.message);
         if (!res.data) throw new Error("Ainda sem nenhum dado salvo — aguarde o Glog rodar a primeira consulta.");
+        tinyUltimoSnapshot = tinyOutboundRowParaWidget(res.data);
         var target = document.getElementById("tiny-outbound-widget");
         if (target) {
-          target.innerHTML = renderTinyOutboundWidget(tinyOutboundRowParaWidget(res.data));
+          target.innerHTML = renderTinyOutboundWidget(tinyUltimoSnapshot);
           wireChartTooltips(target);
+          tinyTickCronometro();
         }
       })
       .catch(function(err){
@@ -4179,6 +4438,31 @@ try {
 
   function wireInteractions(){
     var root = document.getElementById("root");
+
+    /* ---- Fontes de Dados: horários de corte e coleta (Outbound Tiny) ---- */
+    var horariosSalvarBtn = root.querySelector('[data-horarios-salvar]');
+    if (horariosSalvarBtn) horariosSalvarBtn.addEventListener("click", function(){
+      if (!sb) return;
+      var linhas = [];
+      root.querySelectorAll('[data-horario="corte"]').forEach(function(el){
+        var empresa = el.getAttribute("data-empresa"), forma = el.getAttribute("data-forma"), dia = parseInt(el.getAttribute("data-dia"),10);
+        var coletaEl = root.querySelector('[data-horario="coleta"][data-empresa="' + empresa + '"][data-forma="' + forma + '"][data-dia="' + dia + '"]');
+        linhas.push({
+          empresa: empresa,
+          forma: forma,
+          dia_semana: dia,
+          horario_corte: el.value || null,
+          horario_coleta: (coletaEl && coletaEl.value) || null,
+        });
+      });
+      var statusEl = document.getElementById("tiny-horarios-status");
+      if (statusEl) statusEl.textContent = "Salvando…";
+      sb.from("tiny_horarios_corte_coleta").upsert(linhas, {onConflict:"empresa,dia_semana,forma"}).then(function(res){
+        if (res.error) { if (statusEl) statusEl.textContent = "Erro ao salvar: " + res.error.message; return; }
+        if (statusEl) statusEl.textContent = "Salvo!";
+        carregarTinyHorarios();
+      });
+    });
 
     /* ---- Fontes de Dados ---- */
     var connNewBtn = root.querySelector('[data-conn-new]');
