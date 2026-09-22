@@ -2891,7 +2891,7 @@ try {
       if (res.error) { console.error("Falha ao carregar horários de corte/coleta:", res.error); return; }
       var lookup = tinyHorariosVazios();
       (res.data||[]).forEach(function(row){
-        lookup[row.empresa][row.forma][row.dia_semana] = { horario_corte: row.horario_corte, horario_coleta: row.horario_coleta };
+        lookup[row.empresa][row.forma][row.dia_semana] = { horario_corte: row.horario_corte, horario_coleta: row.horario_coleta, horario_fim_dia: row.horario_fim_dia };
       });
       tinyHorarios = lookup;
       // Se o widget já estava montado com dados, redesenha só com os
@@ -2998,28 +2998,43 @@ try {
   // Projeção até o corte: no ritmo atual (pedidos/h de hoje), quantos
   // pedidos A MAIS devem sair até o horário de corte — uma estimativa
   // simples pra saber se dá tempo de "abrir mais uma leva" ou não.
+  // Uma projeção genérica (usada duas vezes: até o corte e até o fim do
+  // dia) — no ritmo atual, quantos pedidos A MAIS devem sair até `tipo`
+  // (a chave do horário configurado: "horario_corte" ou "horario_fim_dia").
+  function tinyProjecaoTexto(empresaKey, formaKey, atual, tipo, rotuloPassado){
+    var alvo = tinyHorarioDeHoje(empresaKey, formaKey, tipo);
+    if (!tinyHorarios) return "Carregando…";
+    if (!alvo) return "Sem horário configurado hoje";
+    if (alvo.getTime() <= Date.now()) return rotuloPassado;
+    var horasRestantes = (alvo.getTime()-Date.now())/3600000;
+    return "+" + fmtInt(Math.round(atual*horasRestantes)) + " pedidos";
+  }
+
   function tinyLinhaProjecao(empresaKey, formaKey, embaladoPorForma, primeiroEmbaladoEmIso){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
     var atual = tinyRitmoAtual(embalado, primeiroEmbaladoEmIso);
-    var alvoCorte = tinyHorarioDeHoje(empresaKey, formaKey, "horario_corte");
-    var txt;
-    if (!tinyHorarios) txt = "Carregando…";
-    else if (!alvoCorte) txt = "Sem corte configurado hoje";
-    else if (alvoCorte.getTime() <= Date.now()) txt = "Corte de hoje já passou";
-    else {
-      var horasRestantes = (alvoCorte.getTime()-Date.now())/3600000;
-      txt = "+" + fmtInt(Math.round(atual*horasRestantes)) + " até o corte";
-    }
-    return '<div style="flex:1 1 150px; min-width:140px;">' +
+
+    var txtCorte = tinyProjecaoTexto(empresaKey, formaKey, atual, "horario_corte", "Corte de hoje já passou");
+    var txtFimDia = tinyProjecaoTexto(empresaKey, formaKey, atual, "horario_fim_dia", "Horário de hoje já passou");
+
+    var cfgHoje = (tinyHorarios && tinyHorarios[empresaKey] && tinyHorarios[empresaKey][formaKey] && tinyHorarios[empresaKey][formaKey][new Date().getDay()]) || {};
+    var rotuloFimDia = cfgHoje.horario_fim_dia ? ("Até as " + cfgHoje.horario_fim_dia.slice(0,5)) : "Até o fim do dia";
+
+    return '<div style="flex:1 1 190px; min-width:170px;">' +
       '<div style="font-size:.68rem; font-weight:700; color:var(--ink-2); margin-bottom:3px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
-      '<div class="mono" style="font-size:.9rem; font-weight:700;">' + txt + '</div>' +
+      '<div style="display:flex; gap:14px; flex-wrap:wrap;">' +
+        '<div><div style="font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Até o corte</div>' +
+          '<div class="mono" style="font-size:.9rem; font-weight:700;">' + txtCorte + '</div></div>' +
+        '<div><div style="font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">' + escHtml(rotuloFimDia) + '</div>' +
+          '<div class="mono" style="font-size:.9rem; font-weight:700;">' + txtFimDia + '</div></div>' +
+      '</div>' +
     '</div>';
   }
 
   function tinyProjecaoCard(empresaKey, nomeEmpresa, embaladoPorForma, primeiroEmbaladoEmIso){
     return '<div class="card" style="padding:12px 14px;">' +
-      '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Projeção até o corte — ' + nomeEmpresa + '</div></div>' +
+      '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Projeção — ' + nomeEmpresa + '</div></div>' +
       '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">' +
         TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaProjecao(empresaKey, f, embaladoPorForma, primeiroEmbaladoEmIso); }).join("") +
       '</div>' +
@@ -3140,15 +3155,17 @@ try {
     function tabelaEmpresa(empresaKey, nomeEmpresa){
       var formas = TINY_EMPRESA_FORMAS[empresaKey];
       var header = '<tr><th>Dia</th>' + formas.map(function(f){
-        return '<th>Corte — ' + TINY_FORMA_NOME_EXIBICAO[f] + '</th><th>Coleta — ' + TINY_FORMA_NOME_EXIBICAO[f] + '</th>';
+        return '<th>Corte — ' + TINY_FORMA_NOME_EXIBICAO[f] + '</th><th>Coleta — ' + TINY_FORMA_NOME_EXIBICAO[f] + '</th><th>Fim do dia — ' + TINY_FORMA_NOME_EXIBICAO[f] + '</th>';
       }).join("") + '</tr>';
       var linhas = DIAS_SEMANA_NOMES.map(function(nome, idx){
         var celulas = formas.map(function(f){
           var cfg = (tinyHorarios && tinyHorarios[empresaKey] && tinyHorarios[empresaKey][f] && tinyHorarios[empresaKey][f][idx]) || {};
           var corte = cfg.horario_corte ? cfg.horario_corte.slice(0,5) : "";
           var coleta = cfg.horario_coleta ? cfg.horario_coleta.slice(0,5) : "";
+          var fimDia = cfg.horario_fim_dia ? cfg.horario_fim_dia.slice(0,5) : "";
           return '<td><input type="time" class="date-input" data-horario="corte" data-empresa="' + empresaKey + '" data-forma="' + f + '" data-dia="' + idx + '" value="' + corte + '"></td>' +
-            '<td><input type="time" class="date-input" data-horario="coleta" data-empresa="' + empresaKey + '" data-forma="' + f + '" data-dia="' + idx + '" value="' + coleta + '"></td>';
+            '<td><input type="time" class="date-input" data-horario="coleta" data-empresa="' + empresaKey + '" data-forma="' + f + '" data-dia="' + idx + '" value="' + coleta + '"></td>' +
+            '<td><input type="time" class="date-input" data-horario="fim_dia" data-empresa="' + empresaKey + '" data-forma="' + f + '" data-dia="' + idx + '" value="' + fimDia + '"></td>';
         }).join("");
         return '<tr><td>' + nome + '</td>' + celulas + '</tr>';
       }).join("");
@@ -3158,7 +3175,7 @@ try {
 
     return '<div class="card">' +
       '<div class="card-head"><span class="card-title">Horários de corte e coleta — Outbound Tiny</span></div>' +
-      '<div class="desc">Por empresa, forma de envio e dia da semana — vale a partir de hoje, repete toda semana. Alimenta os cards de ritmo, projeção e o cronômetro na Visão Geral.</div>' +
+      '<div class="desc">Por empresa, forma de envio e dia da semana — vale a partir de hoje, repete toda semana. "Fim do dia" é o horário usado na projeção pro dia inteiro (ex.: 18:00). Alimenta os cards de ritmo, projeção e o cronômetro na Visão Geral.</div>' +
       (tinyHorarios ? "" : '<p style="color:var(--ink-3); font-size:.85rem; margin-top:8px;">Carregando horários…</p>') +
       tabelaEmpresa("PR","Ampec PR") + tabelaEmpresa("EDN","Ampec SC EDN") +
       '<div class="btn-row" style="margin-top:14px;">' +
@@ -4528,12 +4545,14 @@ try {
       root.querySelectorAll('[data-horario="corte"]').forEach(function(el){
         var empresa = el.getAttribute("data-empresa"), forma = el.getAttribute("data-forma"), dia = parseInt(el.getAttribute("data-dia"),10);
         var coletaEl = root.querySelector('[data-horario="coleta"][data-empresa="' + empresa + '"][data-forma="' + forma + '"][data-dia="' + dia + '"]');
+        var fimDiaEl = root.querySelector('[data-horario="fim_dia"][data-empresa="' + empresa + '"][data-forma="' + forma + '"][data-dia="' + dia + '"]');
         linhas.push({
           empresa: empresa,
           forma: forma,
           dia_semana: dia,
           horario_corte: el.value || null,
           horario_coleta: (coletaEl && coletaEl.value) || null,
+          horario_fim_dia: (fimDiaEl && fimDiaEl.value) || null,
         });
       });
       var statusEl = document.getElementById("tiny-horarios-status");
