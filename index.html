@@ -2856,6 +2856,10 @@ try {
       pendentePorFormaEnvioEDN: row.pendente_por_forma_envio_edn || {},
       embaladoPorFormaEnvioPR: row.embalado_por_forma_envio_pr || {},
       embaladoPorFormaEnvioEDN: row.embalado_por_forma_envio_edn || {},
+      embaladosPorHoraPR: row.embalados_por_hora_pr || {},
+      embaladosPorHoraEDN: row.embalados_por_hora_edn || {},
+      primeiroEmbaladoEmPR: row.primeiro_embalado_em_pr || null,
+      primeiroEmbaladoEmEDN: row.primeiro_embalado_em_edn || null,
       atualizadoEm: row.atualizado_em,
     };
   }
@@ -2939,18 +2943,27 @@ try {
     return null;
   }
 
-  function tinyRitmoAtual(embaladoHoje){
+  // Ritmo atual = total embalado hoje ÷ horas desde o PRIMEIRO embalado de
+  // hoje (não desde meia-noite — pedido do dono: refletir desde quando o
+  // time realmente começou a embalar). Sem primeiro embalado ainda
+  // conhecido (ou zero embalado), cai pra meia-noite como fallback neutro.
+  function tinyRitmoAtual(embaladoHoje, primeiroEmbaladoEmIso){
     var agora = new Date();
-    var meiaNoite = new Date(agora); meiaNoite.setHours(0,0,0,0);
-    var horas = Math.max((agora.getTime()-meiaNoite.getTime())/3600000, 1/60);
+    var inicio;
+    if (primeiroEmbaladoEmIso){
+      inicio = new Date(primeiroEmbaladoEmIso);
+    } else {
+      inicio = new Date(agora); inicio.setHours(0,0,0,0);
+    }
+    var horas = Math.max((agora.getTime()-inicio.getTime())/3600000, 1/60);
     return embaladoHoje/horas;
   }
 
-  function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma){
+  function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
     var pendente = pendentePorForma[chaveTiny] || 0;
-    var atual = tinyRitmoAtual(embalado);
+    var atual = tinyRitmoAtual(embalado, primeiroEmbaladoEmIso);
     var alvoColeta = tinyHorarioDeHoje(empresaKey, formaKey, "horario_coleta");
     var necessarioNum = null, necessarioTxt;
     if (!tinyHorarios) necessarioTxt = "Carregando…";
@@ -2962,22 +2975,22 @@ try {
       necessarioTxt = fmtDec(necessarioNum,1) + " /h";
     }
     var cor = necessarioNum !== null ? (atual >= necessarioNum ? "var(--status-good)" : "var(--status-critical)") : "var(--ink)";
-    return '<div style="flex:1 1 190px; min-width:170px;">' +
-      '<div style="font-size:.74rem; font-weight:700; color:var(--ink-2); margin-bottom:4px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
-      '<div style="display:flex; gap:18px; flex-wrap:wrap;">' +
-        '<div><div style="font-size:.64rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Ritmo atual</div>' +
-          '<div class="mono" style="font-size:1.25rem; font-weight:700; color:' + cor + ';">' + fmtDec(atual,1) + '<span style="font-size:.68rem; font-weight:500; color:var(--ink-3);"> /h</span></div></div>' +
-        '<div><div style="font-size:.64rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Necessário</div>' +
-          '<div class="mono" style="font-size:1.25rem; font-weight:700;">' + necessarioTxt + '</div></div>' +
+    return '<div style="flex:1 1 150px; min-width:140px;">' +
+      '<div style="font-size:.68rem; font-weight:700; color:var(--ink-2); margin-bottom:3px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
+      '<div style="display:flex; gap:14px; flex-wrap:wrap;">' +
+        '<div><div style="font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Ritmo atual</div>' +
+          '<div class="mono" style="font-size:.95rem; font-weight:700; color:' + cor + ';">' + fmtDec(atual,1) + '<span style="font-size:.62rem; font-weight:500; color:var(--ink-3);"> /h</span></div></div>' +
+        '<div><div style="font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Necessário</div>' +
+          '<div class="mono" style="font-size:.95rem; font-weight:700;">' + necessarioTxt + '</div></div>' +
       '</div>' +
     '</div>';
   }
 
-  function tinyRitmoCard(empresaKey, nomeEmpresa, embaladoPorForma, pendentePorForma){
-    return '<div class="card">' +
-      '<div class="card-head"><div class="card-title">Ritmo atual — ' + nomeEmpresa + '</div><div class="desc">Pedidos por hora saindo agora vs. quanto precisaria pra terminar até a coleta de hoje.</div></div>' +
-      '<div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:4px;">' +
-        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaRitmo(empresaKey, f, embaladoPorForma, pendentePorForma); }).join("") +
+  function tinyRitmoCard(empresaKey, nomeEmpresa, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso){
+    return '<div class="card" style="padding:12px 14px;">' +
+      '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Ritmo atual — ' + nomeEmpresa + '</div></div>' +
+      '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">' +
+        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaRitmo(empresaKey, f, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso); }).join("") +
       '</div>' +
     '</div>';
   }
@@ -2985,10 +2998,10 @@ try {
   // Projeção até o corte: no ritmo atual (pedidos/h de hoje), quantos
   // pedidos A MAIS devem sair até o horário de corte — uma estimativa
   // simples pra saber se dá tempo de "abrir mais uma leva" ou não.
-  function tinyLinhaProjecao(empresaKey, formaKey, embaladoPorForma){
+  function tinyLinhaProjecao(empresaKey, formaKey, embaladoPorForma, primeiroEmbaladoEmIso){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
-    var atual = tinyRitmoAtual(embalado);
+    var atual = tinyRitmoAtual(embalado, primeiroEmbaladoEmIso);
     var alvoCorte = tinyHorarioDeHoje(empresaKey, formaKey, "horario_corte");
     var txt;
     if (!tinyHorarios) txt = "Carregando…";
@@ -2996,19 +3009,19 @@ try {
     else if (alvoCorte.getTime() <= Date.now()) txt = "Corte de hoje já passou";
     else {
       var horasRestantes = (alvoCorte.getTime()-Date.now())/3600000;
-      txt = "+" + fmtInt(Math.round(atual*horasRestantes)) + " pedidos até o corte";
+      txt = "+" + fmtInt(Math.round(atual*horasRestantes)) + " até o corte";
     }
-    return '<div style="flex:1 1 190px; min-width:170px;">' +
-      '<div style="font-size:.74rem; font-weight:700; color:var(--ink-2); margin-bottom:4px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
-      '<div class="mono" style="font-size:1.15rem; font-weight:700;">' + txt + '</div>' +
+    return '<div style="flex:1 1 150px; min-width:140px;">' +
+      '<div style="font-size:.68rem; font-weight:700; color:var(--ink-2); margin-bottom:3px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
+      '<div class="mono" style="font-size:.9rem; font-weight:700;">' + txt + '</div>' +
     '</div>';
   }
 
-  function tinyProjecaoCard(empresaKey, nomeEmpresa, embaladoPorForma){
-    return '<div class="card">' +
-      '<div class="card-head"><div class="card-title">Projeção até o corte — ' + nomeEmpresa + '</div><div class="desc">Estimativa de quantos pedidos ainda devem sair até o corte, mantido o ritmo atual.</div></div>' +
-      '<div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:4px;">' +
-        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaProjecao(empresaKey, f, embaladoPorForma); }).join("") +
+  function tinyProjecaoCard(empresaKey, nomeEmpresa, embaladoPorForma, primeiroEmbaladoEmIso){
+    return '<div class="card" style="padding:12px 14px;">' +
+      '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Projeção até o corte — ' + nomeEmpresa + '</div></div>' +
+      '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">' +
+        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaProjecao(empresaKey, f, embaladoPorForma, primeiroEmbaladoEmIso); }).join("") +
       '</div>' +
     '</div>';
   }
@@ -3021,6 +3034,62 @@ try {
     var m = Math.floor((totalSeg%3600)/60);
     var s = totalSeg%60;
     return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");
+  }
+
+  // Gráfico de barras simples com o valor escrito EM CIMA de cada coluna
+  // (pedido explícito do dono) — variante enxuta do barChart() genérico
+  // (não reaproveitado direto pra não arriscar mudar o visual das outras
+  // seções que já usam barChart()).
+  function tinyBarChartComValor(id, buckets, colorVar){
+    var W = 720, H = 200, padL = 34, padR = 12, padT = 22, padB = 26;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var n = Math.max(buckets.length, 1);
+    var slot = plotW/n;
+    var barW = Math.max(8, slot * (n>16?0.55:0.5));
+    var values = buckets.map(function(b){ return b.value; });
+    var maxV = niceMax(Math.max.apply(null, values.concat([1])));
+
+    var gridLine = (function(){
+      var y = padT;
+      return '<line x1="' + padL + '" x2="' + (W-padR) + '" y1="' + (padT+plotH).toFixed(1) + '" y2="' + (padT+plotH).toFixed(1) + '" style="stroke:var(--border); stroke-width:1;"></line>';
+    })();
+
+    var bars = buckets.map(function(b,i){
+      var v = b.value;
+      var x = padL + i*slot + (slot-barW)/2;
+      var barH = maxV > 0 ? (v/maxV)*plotH : 0;
+      var y = padT + plotH - barH;
+      var rotulo = v > 0
+        ? '<text x="' + (x+barW/2).toFixed(1) + '" y="' + (y-6).toFixed(1) + '" text-anchor="middle" style="font-size:10px; font-weight:700; fill:var(--ink-2); font-family:\'IBM Plex Mono\',monospace;">' + fmtInt(v) + '</text>'
+        : "";
+      var label = '<text x="' + (padL+i*slot+slot/2).toFixed(1) + '" y="' + (H-8) + '" text-anchor="middle" style="font-size:9.5px; fill:var(--ink-3);">' + b.label + '</text>';
+      return '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + Math.max(0,barH).toFixed(1) + '" rx="4" style="fill:' + colorVar + ';"></rect>' + rotulo + label;
+    }).join("");
+
+    return '<div class="chart-wrap" data-chart="' + id + '"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">' + gridLine + bars + '</svg></div>';
+  }
+
+  // Buckets de horas: desde a primeira hora com pedido embalado hoje até a
+  // hora atual (sem mostrar as horas "mortas" antes de começar a embalar).
+  function tinyBucketsEmbaladosPorHora(embaladosPorHora, primeiroEmbaladoEmIso){
+    var horaFim = new Date().getHours();
+    var horaInicio = primeiroEmbaladoEmIso ? new Date(primeiroEmbaladoEmIso).getHours() : horaFim;
+    var buckets = [];
+    for (var h = horaInicio; h <= horaFim; h++){
+      buckets.push({ label: h + "h", value: embaladosPorHora[String(h)] || 0 });
+    }
+    return buckets;
+  }
+
+  function tinyEmbaladosPorHoraCard(nomeEmpresa, chartId, embaladosPorHora, primeiroEmbaladoEmIso){
+    var buckets = tinyBucketsEmbaladosPorHora(embaladosPorHora, primeiroEmbaladoEmIso);
+    var temDados = buckets.some(function(b){ return b.value > 0; });
+    return '<div class="card" style="margin-top:16px;">' +
+      '<div class="card-head"><div class="card-title">Pedidos embalados por hora — ' + nomeEmpresa + '</div><div class="desc">Quantos pedidos foram embalados em cada hora, desde o primeiro embalado de hoje.</div></div>' +
+      (temDados
+        ? tinyBarChartComValor(chartId, buckets, "var(--accent)")
+        : '<p style="color:var(--ink-3); font-size:.85rem;">Ainda sem dados suficientes — precisa de pelo menos 2 consultas (uns 5min) pra calcular a diferença.</p>') +
+    '</div>';
   }
 
   var TINY_CRONOMETRO_ALVOS = [
@@ -3170,14 +3239,15 @@ try {
     var semDadosMsg = '<p style="color:var(--ink-3); font-size:.85rem;">Ainda sem dados suficientes — precisa de pelo menos 2 consultas (uns 5min) pra calcular a diferença.</p>';
 
     return '' +
-      '<div class="kpi-grid">' + kpis.join("") + '</div>' +
+      tinyCronometroCard() +
+      '<div class="kpi-grid" style="margin-top:16px;">' + kpis.join("") + '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
-        tinyRitmoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.pendentePorFormaEnvioPR) +
-        tinyRitmoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.pendentePorFormaEnvioEDN) +
+        tinyRitmoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.pendentePorFormaEnvioPR, d.primeiroEmbaladoEmPR) +
+        tinyRitmoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.pendentePorFormaEnvioEDN, d.primeiroEmbaladoEmEDN) +
       '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
-        tinyProjecaoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR) +
-        tinyProjecaoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN) +
+        tinyProjecaoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.primeiroEmbaladoEmPR) +
+        tinyProjecaoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.primeiroEmbaladoEmEDN) +
       '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
         '<div class="card"><div class="card-head"><div class="card-title">A embalar por forma de envio</div></div>' + tinyBarList(d.pendentePorFormaEnvio) + '</div>' +
@@ -3187,6 +3257,8 @@ try {
         tinyBarList(d.embaladoPorEmbalador) + embaladorNota +
       '</div>' +
       formasTabela +
+      tinyEmbaladosPorHoraCard("Ampec PR", "tiny-embalados-hora-pr", d.embaladosPorHoraPR, d.primeiroEmbaladoEmPR) +
+      tinyEmbaladosPorHoraCard("Ampec SC EDN", "tiny-embalados-hora-edn", d.embaladosPorHoraEDN, d.primeiroEmbaladoEmEDN) +
       '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Horário de pico de aprovação — Ampec PR</div><div class="desc">Quantos pedidos foram aprovados a cada hora, acumulado desde a primeira consulta de hoje.</div></div>' +
         (temAprovadosPR
           ? heatmapChart("tiny-aprovados-hora-pr", matrizPR, horas, ["Hoje"]) + heatmapLegend()
@@ -3196,8 +3268,7 @@ try {
         (temAprovadosEDN
           ? heatmapChart("tiny-aprovados-hora-edn", matrizEDN, horas, ["Hoje"]) + heatmapLegend()
           : semDadosMsg) +
-      '</div>' +
-      tinyCronometroCard();
+      '</div>';
   }
 
   function refreshTinyOutbound(){
