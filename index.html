@@ -577,6 +577,17 @@ details > summary::-webkit-details-marker{display:none;}
   .pbar-label{width:92px;}
 }
 </style>
+<script>
+// Aplica o tema salvo ANTES do primeiro paint, pra não piscar tema errado
+// na abertura da página. Preferência é só deste navegador (localStorage),
+// nunca vai pro banco — cada pessoa escolhe o próprio tema.
+try {
+  var temaSalvo = localStorage.getItem("tdc-tema");
+  if (temaSalvo === "light" || temaSalvo === "dark") {
+    document.documentElement.setAttribute("data-theme", temaSalvo);
+  }
+} catch (e) {}
+</script>
 </head>
 <body>
 
@@ -2134,6 +2145,29 @@ details > summary::-webkit-details-marker{display:none;}
     ]
   };
 
+  // Tema claro/escuro — preferência só deste navegador (localStorage),
+  // nunca no banco. `data-theme` no <html> já é lido pelo CSS (:root[data-
+  // theme="dark"/"light"]); sem atributo, segue o tema do sistema.
+  function temaAtual(){
+    var attr = document.documentElement.getAttribute("data-theme");
+    if (attr === "light" || attr === "dark") return attr;
+    return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  }
+  function aplicarTema(tema){
+    document.documentElement.setAttribute("data-theme", tema);
+    try { localStorage.setItem("tdc-tema", tema); } catch (e) {}
+  }
+  function themeToggleHtml(){
+    var atual = temaAtual();
+    return '<div class="filter-field" style="padding:0 16px 12px;">' +
+      '<span class="fl">Tema</span>' +
+      '<div class="segmented" data-group="tema">' +
+        '<button class="' + (atual==="light"?"active":"") + '" data-tema="light">Claro</button>' +
+        '<button class="' + (atual==="dark"?"active":"") + '" data-tema="dark">Escuro</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   function sidebarHtml(){
     var rootItemsTop = [{id:"geral", ic:"◆", label:"Visão Geral"}];
     var groups = [
@@ -2194,6 +2228,7 @@ details > summary::-webkit-details-marker{display:none;}
           rootItemsBottom.map(rootBtn).join("") +
           groupBtn(ajudaGroup) +
         '</div>' +
+        themeToggleHtml() +
         '<div class="sidebar-foot">Protótipo · dados fictícios<br>pronto para conectar ao banco</div>' +
       '</div>' +
       mobileFlyoutHtml +
@@ -4834,6 +4869,13 @@ details > summary::-webkit-details-marker{display:none;}
       }).catch(function(err){
         state.mipBusy = false;
         state.mipError = "Falha ao salvar: " + err.message;
+        render();
+      });
+    });
+
+    root.querySelectorAll("[data-tema]").forEach(function(el){
+      el.addEventListener("click", function(){
+        aplicarTema(el.getAttribute("data-tema"));
         render();
       });
     });
