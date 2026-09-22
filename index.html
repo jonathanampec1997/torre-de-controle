@@ -2951,7 +2951,13 @@ try {
     else if (!alvoColeta) necessarioTxt = "Sem coleta configurada hoje";
     else if (alvoColeta.getTime() <= Date.now()) necessarioTxt = "Coleta de hoje já passou";
     else {
-      var horasRestantes = (alvoColeta.getTime()-Date.now())/3600000;
+      // Arredonda pra cima em horas CHEIAS (mín. 1h) — pedido do dono: sem
+      // isso, o tempo restante encolhe minuto a minuto conforme a coleta
+      // se aproxima e o "necessário" explode (ex.: 30 pedidos em 6min =
+      // 300/h). Arredondado, a última hora inteira antes da coleta sempre
+      // conta como "1h", então o necessário nunca passa do total pendente
+      // e só muda de hora em hora, não a cada atualização.
+      var horasRestantes = Math.max(1, Math.ceil((alvoColeta.getTime()-Date.now())/3600000));
       necessarioNum = pendente/horasRestantes;
       necessarioTxt = fmtDec(necessarioNum,1) + " /h";
     }
