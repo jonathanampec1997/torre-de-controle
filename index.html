@@ -2858,6 +2858,8 @@ try {
       embaladoPorFormaEnvioEDN: row.embalado_por_forma_envio_edn || {},
       embaladosPorHoraPR: row.embalados_por_hora_pr || {},
       embaladosPorHoraEDN: row.embalados_por_hora_edn || {},
+      embaladosPorHoraFormaPR: row.embalados_por_hora_forma_pr || {},
+      embaladosPorHoraFormaEDN: row.embalados_por_hora_forma_edn || {},
       primeiroEmbaladoEmPR: row.primeiro_embalado_em_pr || null,
       primeiroEmbaladoEmEDN: row.primeiro_embalado_em_edn || null,
       atualizadoEm: row.atualizado_em,
@@ -2940,11 +2942,34 @@ try {
     return embaladoHoje/horas;
   }
 
-  function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso){
+  // Ritmo atual, versão "hora a hora": em vez de uma média desde o primeiro
+  // embalado do dia (que fica inflada por um pico de manhã e projeta número
+  // absurdo pro resto do dia — achado do dono em 2026-09-23), usa a média
+  // das últimas horas CHEIAS realmente observadas, contadas pelo mesmo
+  // método de diferença de IDs sem repetição já validado pro mapa de calor
+  // de aprovados (embaladosPorHoraForma, ver tiny-outbound-snapshot.ts).
+  // A hora em andamento (ainda incompleta) fica de fora de propósito, senão
+  // um pedido embalado nos primeiros minutos de uma hora nova já dispararia
+  // um "pedidos/h" fora da realidade. Sem nenhuma hora cheia ainda hoje
+  // (bem no início do dia), cai pro método antigo como fallback seguro.
+  var TINY_RITMO_JANELA_HORAS = 3;
+  function tinyRitmoAtualPorHora(porHoraForma, embaladoHoje, primeiroEmbaladoEmIso){
+    var horaAtual = new Date().getHours();
+    var horasComDado = [];
+    for (var h = 0; h < horaAtual; h++){
+      if (porHoraForma && porHoraForma[String(h)] !== undefined) horasComDado.push(h);
+    }
+    if (horasComDado.length === 0) return tinyRitmoAtual(embaladoHoje, primeiroEmbaladoEmIso);
+    var ultimas = horasComDado.slice(-TINY_RITMO_JANELA_HORAS);
+    var soma = ultimas.reduce(function(acc,h2){ return acc + (porHoraForma[String(h2)]||0); }, 0);
+    return soma/ultimas.length;
+  }
+
+  function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
     var pendente = pendentePorForma[chaveTiny] || 0;
-    var atual = tinyRitmoAtual(embalado, primeiroEmbaladoEmIso);
+    var atual = tinyRitmoAtualPorHora((embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
     var alvoColeta = tinyHorarioDeHoje(empresaKey, formaKey, "horario_coleta");
     var necessarioNum = null, necessarioTxt;
     if (!tinyHorarios) necessarioTxt = "Carregando…";
@@ -2973,11 +2998,11 @@ try {
     '</div>';
   }
 
-  function tinyRitmoCard(empresaKey, nomeEmpresa, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso){
+  function tinyRitmoCard(empresaKey, nomeEmpresa, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     return '<div class="card" style="padding:12px 14px;">' +
       '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Ritmo atual — ' + nomeEmpresa + '</div></div>' +
       '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">' +
-        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaRitmo(empresaKey, f, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso); }).join("") +
+        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaRitmo(empresaKey, f, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma); }).join("") +
       '</div>' +
     '</div>';
   }
@@ -2997,10 +3022,10 @@ try {
     return "+" + fmtInt(Math.round(atual*horasRestantes)) + " pedidos";
   }
 
-  function tinyLinhaProjecao(empresaKey, formaKey, embaladoPorForma, primeiroEmbaladoEmIso){
+  function tinyLinhaProjecao(empresaKey, formaKey, embaladoPorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
-    var atual = tinyRitmoAtual(embalado, primeiroEmbaladoEmIso);
+    var atual = tinyRitmoAtualPorHora((embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
 
     var txtCorte = tinyProjecaoTexto(empresaKey, formaKey, atual, "horario_corte", "Corte de hoje já passou");
     var txtFimDia = tinyProjecaoTexto(empresaKey, formaKey, atual, "horario_fim_dia", "Horário de hoje já passou");
@@ -3019,11 +3044,11 @@ try {
     '</div>';
   }
 
-  function tinyProjecaoCard(empresaKey, nomeEmpresa, embaladoPorForma, primeiroEmbaladoEmIso){
+  function tinyProjecaoCard(empresaKey, nomeEmpresa, embaladoPorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     return '<div class="card" style="padding:12px 14px;">' +
       '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Projeção — ' + nomeEmpresa + '</div></div>' +
       '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">' +
-        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaProjecao(empresaKey, f, embaladoPorForma, primeiroEmbaladoEmIso); }).join("") +
+        TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaProjecao(empresaKey, f, embaladoPorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma); }).join("") +
       '</div>' +
     '</div>';
   }
@@ -3287,12 +3312,12 @@ try {
       tinyCronometroCard() +
       '<div class="kpi-grid" style="margin-top:16px;">' + kpis.join("") + '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
-        tinyRitmoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.pendentePorFormaEnvioPR, d.primeiroEmbaladoEmPR) +
-        tinyRitmoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.pendentePorFormaEnvioEDN, d.primeiroEmbaladoEmEDN) +
+        tinyRitmoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.pendentePorFormaEnvioPR, d.primeiroEmbaladoEmPR, d.embaladosPorHoraFormaPR) +
+        tinyRitmoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.pendentePorFormaEnvioEDN, d.primeiroEmbaladoEmEDN, d.embaladosPorHoraFormaEDN) +
       '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
-        tinyProjecaoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.primeiroEmbaladoEmPR) +
-        tinyProjecaoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.primeiroEmbaladoEmEDN) +
+        tinyProjecaoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.primeiroEmbaladoEmPR, d.embaladosPorHoraFormaPR) +
+        tinyProjecaoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.primeiroEmbaladoEmEDN, d.embaladosPorHoraFormaEDN) +
       '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
         '<div class="card"><div class="card-head"><div class="card-title">A embalar por forma de envio</div></div>' + tinyBarList(d.pendentePorFormaEnvio) + '</div>' +
