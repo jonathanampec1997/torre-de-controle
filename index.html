@@ -1799,6 +1799,7 @@ try {
     return (s===undefined||s===null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
   function fmtInt(n){ return Math.round(n).toLocaleString("pt-BR"); }
+  function uniq(arr){ var seen = {}; var out = []; arr.forEach(function(v){ if (!seen[v]){ seen[v]=1; out.push(v); } }); return out; }
   function fmtDec(n,d){ d = d===undefined?1:d; return n.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}); }
   // Duração em minutos -> {value, unit} na maior unidade legível: até 59min
   // fica em minutos, de 1h até 23h59 vira horas, 24h+ vira dias.
@@ -3341,6 +3342,238 @@ try {
       '</div>';
   }
 
+  /* ==================== HISTÓRICO DIÁRIO OUTBOUND (tiny_outbound_historico) ====================
+     Diferente do widget acima (ao vivo, zera à meia-noite), isso lê o
+     arquivo permanente que o Glog grava sozinho às 19h todo dia (ver
+     tiny-outbound-snapshot.ts → salvarHistoricoNoSupabase, pedido do dono
+     em 2026-09-23). Mostra dia a dia, com filtro de data/empresa/forma de
+     envio/embalador — usado em Outbound → Separação/Embalagem (por hora e
+     por pessoa) e Outbound → Pedidos por Marketplace (por empresa/forma). ---- */
+  var historicoOutbound = {
+    carregando: false,
+    erro: null,
+    datasDisponiveis: [], // ["2026-09-23", ...] mais recente primeiro
+    dataSelecionada: null,
+    linhasPorData: {}, // cache: data -> linhas cruas da tabela
+    filtroEmpresa: "todas",
+    filtroForma: "todas",
+    filtroEmbalador: "todos",
+  };
+
+  function historicoLinhasFiltradas(){
+    var linhas = historicoOutbound.linhasPorData[historicoOutbound.dataSelecionada] || [];
+    return linhas.filter(function(l){
+      if (historicoOutbound.filtroEmpresa !== "todas" && l.empresa !== historicoOutbound.filtroEmpresa) return false;
+      if (historicoOutbound.filtroForma !== "todas" && l.forma_envio !== historicoOutbound.filtroForma) return false;
+      if (historicoOutbound.filtroEmbalador !== "todos" && l.embalador !== historicoOutbound.filtroEmbalador) return false;
+      return true;
+    });
+  }
+
+  function historicoAgrupar(linhas, chave){
+    var mapa = {};
+    linhas.forEach(function(l){
+      var k = l[chave];
+      mapa[k] = (mapa[k] || 0) + l.pedidos;
+    });
+    return mapa;
+  }
+
+  function historicoInsights(porHora, totalGeral){
+    var horas = Object.keys(porHora).map(Number).filter(function(h){ return h >= 0; }).sort(function(a,b){ return a-b; });
+    if (!horas.length) return ['<p style="color:var(--ink-3); font-size:.85rem;">Sem horas identificadas nesse recorte ainda — sem dado suficiente pra gerar análise.</p>'];
+    var picoHora = horas.reduce(function(a,b){ return (porHora[b]||0) > (porHora[a]||0) ? b : a; });
+    var quedaHora = horas.reduce(function(a,b){ return (porHora[b]||0) < (porHora[a]||0) ? b : a; });
+    var melhorInicio = horas[0], melhorSoma = -1;
+    for (var i=0;i<horas.length;i++){
+      var h = horas[i];
+      var soma = (porHora[h]||0) + (porHora[h+1]||0) + (porHora[h+2]||0);
+      if (soma > melhorSoma){ melhorSoma = soma; melhorInicio = h; }
+    }
+    var itens = [
+      '📈 <strong>Pico de embalagem:</strong> ' + picoHora + 'h–' + (picoHora+1) + 'h, com ' + fmtInt(porHora[picoHora]) + ' pedido(s).',
+      '⏱️ <strong>Janela de maior volume (3h):</strong> ' + melhorInicio + 'h às ' + (melhorInicio+3) + 'h — ' + fmtInt(melhorSoma) + ' pedido(s) no total.',
+      '📉 <strong>Menor movimento:</strong> ' + quedaHora + 'h–' + (quedaHora+1) + 'h, com ' + fmtInt(porHora[quedaHora]) + ' pedido(s).',
+      '📦 <strong>Total do dia (horas identificadas):</strong> ' + fmtInt(totalGeral) + ' pedido(s).',
+    ];
+    return itens.map(function(t){ return '<li style="margin-bottom:6px;">' + t + '</li>'; });
+  }
+
+  function historicoFiltrosHtml(){
+    var datas = historicoOutbound.datasDisponiveis;
+    var linhasTodas = historicoOutbound.linhasPorData[historicoOutbound.dataSelecionada] || [];
+    var empresas = uniq(linhasTodas.map(function(l){ return l.empresa; })).sort();
+    var formas = uniq(linhasTodas.map(function(l){ return l.forma_envio; })).sort();
+    var embaladores = uniq(linhasTodas.map(function(l){ return l.embalador; })).sort();
+    function opt(v, label, sel){ return '<option value="' + escAttr(v) + '"' + (sel ? ' selected' : '') + '>' + escHtml(label) + '</option>'; }
+    return '<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">' +
+      '<select data-historico-filtro="data" class="date-input">' +
+        datas.map(function(d){ return opt(d, fmtDateBR(d), d === historicoOutbound.dataSelecionada); }).join("") +
+      '</select>' +
+      '<select data-historico-filtro="empresa" class="date-input">' +
+        opt("todas", "Todas as empresas", historicoOutbound.filtroEmpresa === "todas") +
+        empresas.map(function(e){ return opt(e, e === "PR" ? "Ampec PR" : "Ampec SC EDN", e === historicoOutbound.filtroEmpresa); }).join("") +
+      '</select>' +
+      '<select data-historico-filtro="forma" class="date-input">' +
+        opt("todas", "Todas as formas de envio", historicoOutbound.filtroForma === "todas") +
+        formas.map(function(f){ return opt(f, f, f === historicoOutbound.filtroForma); }).join("") +
+      '</select>' +
+      '<select data-historico-filtro="embalador" class="date-input">' +
+        opt("todos", "Todos os embaladores", historicoOutbound.filtroEmbalador === "todos") +
+        embaladores.map(function(e){ return opt(e, e, e === historicoOutbound.filtroEmbalador); }).join("") +
+      '</select>' +
+    '</div>';
+  }
+
+  function renderHistoricoEmbalagemWidget(){
+    if (historicoOutbound.erro) return '<div class="card"><p style="color:var(--status-critical);">' + escHtml(historicoOutbound.erro) + '</p></div>';
+    if (!historicoOutbound.dataSelecionada) return '<div class="card"><p style="color:var(--ink-3);">Ainda sem nenhum dia arquivado — o primeiro arquivamento roda sozinho às 19h. Ver [[Torre de Controle]] Rodada 38.</p></div>';
+    var linhas = historicoLinhasFiltradas();
+    var porHora = historicoAgrupar(linhas, "hora");
+    var porEmbalador = historicoAgrupar(linhas, "embalador");
+    var totalGeral = linhas.reduce(function(acc,l){ return acc + l.pedidos; }, 0);
+    var totalDesconhecida = porHora["-1"] || 0;
+
+    var horasRows = "";
+    for (var h=0; h<24; h++){
+      var qtd = porHora[String(h)] || 0;
+      if (qtd === 0) continue;
+      horasRows += '<tr><td class="mono">' + String(h).padStart(2,"0") + 'h–' + String((h+1)%24).padStart(2,"0") + 'h</td><td class="num">' + fmtInt(qtd) + '</td></tr>';
+    }
+    if (!horasRows) horasRows = '<tr><td colspan="2" style="color:var(--ink-3);">Nenhuma hora identificada nesse recorte.</td></tr>';
+
+    var embaladorRows = Object.keys(porEmbalador).sort(function(a,b){ return porEmbalador[b]-porEmbalador[a]; })
+      .map(function(nome){ return '<tr><td>' + escHtml(nome) + '</td><td class="num">' + fmtInt(porEmbalador[nome]) + '</td></tr>'; }).join("");
+    if (!embaladorRows) embaladorRows = '<tr><td colspan="2" style="color:var(--ink-3);">Sem dado nesse recorte.</td></tr>';
+
+    return '' +
+      historicoFiltrosHtml() +
+      '<div class="kpi-grid">' +
+        snapshotCard("Total de pedidos embalados", fmtInt(totalGeral), "no dia selecionado", "") +
+        snapshotCard("Sem hora identificada", fmtInt(totalDesconhecida), "de " + fmtInt(totalGeral), totalDesconhecida > 0 ? "pedidos de antes do rastreio por hora existir" : "") +
+      '</div>' +
+      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Análise automática</div></div>' +
+        '<ul style="margin:0; padding-left:18px; font-size:.85rem;">' + historicoInsights(porHora, totalGeral).join("") + '</ul>' +
+      '</div>' +
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
+        '<div class="card"><div class="card-head"><div class="card-title">Pedidos embalados por hora</div></div>' +
+          '<div class="table-wrap"><table><thead><tr><th>Hora</th><th class="num">Pedidos</th></tr></thead><tbody>' + horasRows + '</tbody></table></div>' +
+        '</div>' +
+        '<div class="card"><div class="card-head"><div class="card-title">Pedidos embalados por pessoa</div></div>' +
+          '<div class="table-wrap"><table><thead><tr><th>Embalador</th><th class="num">Pedidos</th></tr></thead><tbody>' + embaladorRows + '</tbody></table></div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderHistoricoMarketplaceWidget(){
+    if (historicoOutbound.erro) return '<div class="card"><p style="color:var(--status-critical);">' + escHtml(historicoOutbound.erro) + '</p></div>';
+    if (!historicoOutbound.dataSelecionada) return '<div class="card"><p style="color:var(--ink-3);">Ainda sem nenhum dia arquivado — o primeiro arquivamento roda sozinho às 19h.</p></div>';
+    var linhas = historicoLinhasFiltradas();
+    var porEmpresa = historicoAgrupar(linhas, "empresa");
+    var porForma = historicoAgrupar(linhas, "forma_envio");
+
+    var porEmpresaForma = {}; // empresa -> forma -> total
+    linhas.forEach(function(l){
+      porEmpresaForma[l.empresa] = porEmpresaForma[l.empresa] || {};
+      porEmpresaForma[l.empresa][l.forma_envio] = (porEmpresaForma[l.empresa][l.forma_envio] || 0) + l.pedidos;
+    });
+    var nomeEmpresa = {PR:"Ampec PR", EDN:"Ampec SC EDN"};
+    var tabelaEmpresaForma = Object.keys(porEmpresaForma).sort().map(function(emp){
+      var formas = porEmpresaForma[emp];
+      var linhasForma = Object.keys(formas).sort(function(a,b){ return formas[b]-formas[a]; })
+        .map(function(f){ return '<tr><td>' + escHtml(f) + '</td><td class="num">' + fmtInt(formas[f]) + '</td></tr>'; }).join("");
+      var totalEmp = Object.keys(formas).reduce(function(acc,f){ return acc+formas[f]; }, 0);
+      return '<div class="card"><div class="card-head"><div class="card-title">' + escHtml(nomeEmpresa[emp] || emp) + ' — ' + fmtInt(totalEmp) + ' pedidos</div></div>' +
+        '<div class="table-wrap"><table><thead><tr><th>Forma de envio</th><th class="num">Pedidos</th></tr></thead><tbody>' + linhasForma + '</tbody></table></div></div>';
+    }).join("");
+
+    var tituloForma = historicoOutbound.filtroEmpresa === "todas" ? "Total por forma de envio (todas as empresas)" : "Total por forma de envio — " + (nomeEmpresa[historicoOutbound.filtroEmpresa] || historicoOutbound.filtroEmpresa);
+    return '' +
+      historicoFiltrosHtml() +
+      '<div class="kpi-grid">' +
+        Object.keys(porEmpresa).sort().map(function(e){ return snapshotCard(nomeEmpresa[e] || e, fmtInt(porEmpresa[e]), "pedidos no dia", ""); }).join("") +
+      '</div>' +
+      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">' + escHtml(tituloForma) + '</div></div>' + tinyBarList(porForma) + '</div>' +
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' + tabelaEmpresaForma + '</div>';
+  }
+
+  function renderHistoricoWidgets(){
+    var elEmb = document.getElementById("historico-embalagem-widget");
+    if (elEmb) elEmb.innerHTML = renderHistoricoEmbalagemWidget();
+    var elMkt = document.getElementById("historico-marketplace-widget");
+    if (elMkt) elMkt.innerHTML = renderHistoricoMarketplaceWidget();
+    var root = document.getElementById("root");
+    if (root) wireHistoricoFiltros(root);
+  }
+
+  function wireHistoricoFiltros(root){
+    root.querySelectorAll('[data-historico-filtro]').forEach(function(sel){
+      sel.addEventListener("change", function(){
+        var campo = sel.getAttribute("data-historico-filtro");
+        if (campo === "data"){
+          historicoOutbound.dataSelecionada = sel.value;
+          historicoOutbound.filtroEmpresa = "todas";
+          historicoOutbound.filtroForma = "todas";
+          historicoOutbound.filtroEmbalador = "todos";
+          carregarHistoricoData(sel.value);
+        } else if (campo === "empresa"){
+          historicoOutbound.filtroEmpresa = sel.value;
+          renderHistoricoWidgets();
+        } else if (campo === "forma"){
+          historicoOutbound.filtroForma = sel.value;
+          renderHistoricoWidgets();
+        } else if (campo === "embalador"){
+          historicoOutbound.filtroEmbalador = sel.value;
+          renderHistoricoWidgets();
+        }
+      });
+    });
+  }
+
+  function carregarHistoricoData(data){
+    if (historicoOutbound.linhasPorData[data]){
+      historicoOutbound.dataSelecionada = data;
+      renderHistoricoWidgets();
+      return;
+    }
+    historicoOutbound.carregando = true;
+    sb.from("tiny_outbound_historico").select("*").eq("data", data).then(function(res){
+      historicoOutbound.carregando = false;
+      if (res.error){ historicoOutbound.erro = "Falha ao carregar histórico: " + res.error.message; renderHistoricoWidgets(); return; }
+      historicoOutbound.linhasPorData[data] = res.data || [];
+      historicoOutbound.dataSelecionada = data;
+      renderHistoricoWidgets();
+    });
+  }
+
+  var historicoOutboundFetching = false;
+  function refreshHistoricoOutbound(){
+    var temContainer = document.getElementById("historico-embalagem-widget") || document.getElementById("historico-marketplace-widget");
+    if (!temContainer) return; // não estamos numa subpágina que usa isso agora
+    if (!sb) { historicoOutbound.erro = "Não foi possível conectar ao banco de dados (Supabase)."; renderHistoricoWidgets(); return; }
+    if (historicoOutbound.datasDisponiveis.length > 0){
+      // já carregamos as datas nessa sessão — só garante que o dia
+      // selecionado está carregado e redesenha (sem bater no banco de novo).
+      if (historicoOutbound.dataSelecionada && historicoOutbound.linhasPorData[historicoOutbound.dataSelecionada]){
+        renderHistoricoWidgets();
+      } else if (historicoOutbound.dataSelecionada){
+        carregarHistoricoData(historicoOutbound.dataSelecionada);
+      }
+      return;
+    }
+    if (historicoOutboundFetching) return;
+    historicoOutboundFetching = true;
+    sb.from("tiny_outbound_historico").select("data").then(function(res){
+      historicoOutboundFetching = false;
+      if (res.error){ historicoOutbound.erro = "Falha ao carregar datas do histórico: " + res.error.message; renderHistoricoWidgets(); return; }
+      var datas = uniq((res.data || []).map(function(r){ return r.data; })).sort().reverse();
+      historicoOutbound.datasDisponiveis = datas;
+      if (!datas.length){ renderHistoricoWidgets(); return; }
+      historicoOutbound.dataSelecionada = datas[0];
+      carregarHistoricoData(datas[0]);
+    });
+  }
+
   function refreshTinyOutbound(){
     if (tinyOutboundFetching) return;
     var el = document.getElementById("tiny-outbound-widget");
@@ -3962,6 +4195,10 @@ try {
     var sepEmbHtml =
       '<div class="topbar"><div><h1>Outbound · Separação / Embalagem</h1><p>Separação dos itens e empacotamento dos pedidos.</p></div>' + topbarFiltersOut + '</div>' +
       '<div class="content">' +
+        '<section class="sector">' +
+          '<div class="sector-head"><h2>Histórico diário (dado real — Tiny ERP)</h2><div class="desc">Arquivado automaticamente todo dia às 19h — sobrevive à virada do dia, diferente da Visão Geral ao vivo.</div></div>' +
+          '<div id="historico-embalagem-widget"><p style="color:var(--ink-3);">Carregando…</p></div>' +
+        '</section>' +
         demoBanner +
         comparisonSectionOut +
         '<section class="sector">' +
@@ -4003,6 +4240,10 @@ try {
     var marketplacesHtml =
       '<div class="topbar"><div><h1>Outbound · Pedidos por Marketplace</h1><p>Separação, embalagem e cobertura de coleta comparadas entre plataformas.</p></div>' + topbarFiltersOut + '</div>' +
       '<div class="content">' +
+        '<section class="sector">' +
+          '<div class="sector-head"><h2>Histórico diário (dado real — Tiny ERP)</h2><div class="desc">Pedidos embalados por empresa e forma de envio — arquivado automaticamente todo dia às 19h.</div></div>' +
+          '<div id="historico-marketplace-widget"><p style="color:var(--ink-3);">Carregando…</p></div>' +
+        '</section>' +
         demoBanner +
         '<section class="sector">' +
           '<div class="sector-head"><h2>Resumo por plataforma</h2><div class="desc">Separação, embalagem e cobertura de coleta, plataforma a plataforma.</div></div>' +
@@ -4572,6 +4813,7 @@ try {
     root.innerHTML = '<div class="app">' + sidebarHtml() + '<div class="main">' + pageHtml + '</div></div>';
     wireInteractions();
     if (state.page === "geral") refreshTinyOutbound();
+    if (state.page === "outbound") refreshHistoricoOutbound();
     if (state.fullHighlight !== null){
       var hlId = state.fullHighlight;
       var hlTarget = root.querySelector('[data-full-card="' + hlId + '"]');
