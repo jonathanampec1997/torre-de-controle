@@ -2121,6 +2121,7 @@ try {
   var NAV_SUBS = {
     inbound: [
       {id:"inventario", label:"Inventário"},
+      {id:"acuracidade", label:"Acuracidade"},
       {id:"recebimento", label:"Recebimento"},
       {id:"armazenagem", label:"Armazenagem"},
       {id:"abastecimento", label:"Abastecimento"},
@@ -3604,6 +3605,124 @@ try {
     setInterval(refreshTinyOutbound, 5*60*1000);
   }
 
+  /* ============================ ACURACIDADE (itens inventariados) ============================ */
+  // Checagem diária feita pelo Glog às 07h (glog/src/lib/acuracidade.ts):
+  // lista = coluna INVENTARIADO da aba Resumo da planilha de inventário;
+  // Tiny = Geral Ampec PR + Ampec SC; WMS = PS + RC + Full AR000000010556
+  // (MV fora). Acuracidade = 1 − |WMS − Tiny| ÷ Tiny. Aqui só lê o Supabase.
+  var acurFetching = false;
+  function acurPct(v){
+    if (v === null || v === undefined || v === "") return "—";
+    var n = Number(v);
+    return (Math.round(n*10)/10).toString().replace(".", ",") + "%";
+  }
+  function acurCor(v){
+    if (v === null || v === undefined || v === "") return "var(--ink-3)";
+    return Number(v) >= 100 ? "var(--status-good)" : "var(--status-critical)";
+  }
+  function acurDataBr(iso){
+    if (!iso) return "—";
+    var p = String(iso).slice(0,10).split("-");
+    return p[2] + "/" + p[1] + "/" + p[0];
+  }
+  function acurHora(ts){
+    if (!ts) return "—";
+    var d = new Date(ts);
+    return acurDataBr(isoDate(d)) + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+  function acurKpi(label, valor, nota, cor){
+    return '<div class="kpi-card"><div class="kpi-top"><div class="kpi-label">' + label + '</div></div>' +
+      '<div class="kpi-value"' + (cor ? ' style="color:' + cor + ';"' : '') + '>' + valor + '</div>' +
+      '<div class="kpi-bottom" style="color:var(--ink-3); font-size:.78rem;">' + nota + '</div></div>';
+  }
+  function acuracidadeHtmlPage(){
+    return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full), checado todo dia às 07h. Alerta no Slack quando sair de 100%.</p></div></div>' +
+      '<div class="content"><div id="acuracidade-widget"><div class="card" style="color:var(--ink-3);">Carregando…</div></div></div>';
+  }
+  function renderAcuracidade(itens, diaria, execs){
+    var ativos = itens.filter(function(i){ return i.ativo; });
+    var porSkuItem = {}; itens.forEach(function(i){ porSkuItem[i.sku] = i; });
+    var datas = []; diaria.forEach(function(r){ if (datas.indexOf(r.data) < 0) datas.push(r.data); });
+    datas.sort().reverse();
+    var ultimaData = datas[0] || null;
+    var hoje = diaria.filter(function(r){ return r.data === ultimaData && porSkuItem[r.sku] && porSkuItem[r.sku].ativo; });
+    hoje.sort(function(a,b){ return ((a.status === "OK") - (b.status === "OK")) || a.sku.localeCompare(b.sku); });
+    var ok = hoje.filter(function(r){ return r.status === "OK"; }).length;
+    var div = hoje.length - ok;
+    var exec = execs[0] || null;
+
+    var kpis = '<section class="sector"><div class="kpi-grid">' +
+      acurKpi("Itens monitorados", fmtInt(ativos.length), "coluna INVENTARIADO da planilha") +
+      acurKpi("100% na última checagem", fmtInt(ok), ultimaData ? acurDataBr(ultimaData) : "ainda sem checagem", "var(--status-good)") +
+      acurKpi("Divergentes", fmtInt(div), div ? "abaixo de 100%" : "tudo batendo", div ? "var(--status-critical)" : "var(--status-good)") +
+      acurKpi("Última checagem", exec ? acurHora(exec.concluido_em) : "—", exec ? ("Slack: " + (/SLACK_BOT_TOKEN/.test(exec.slack_status || "") ? "ainda não configurado" : escHtml(exec.slack_status || "—"))) : "") +
+    '</div></section>';
+
+    var linhas = hoje.map(function(r){
+      var it = porSkuItem[r.sku] || {};
+      var dif = Number(r.wms_comparado) - Number(r.tiny_total);
+      var pill = r.status === "OK" ? '<span class="pill done">OK</span>' : '<span class="pill critical">' + escHtml(r.status) + '</span>';
+      return '<tr>' +
+        '<td>' + acurDataBr(r.data) + '</td>' +
+        '<td><strong>' + escHtml(r.sku) + '</strong></td>' +
+        '<td>' + acurDataBr(it.data_inventario) + '</td>' +
+        '<td>' + fmtInt(Number(r.contado)) + '</td>' +
+        '<td>' + fmtInt(Number(r.tiny_pr)) + '</td>' +
+        '<td>' + fmtInt(Number(r.tiny_sc)) + '</td>' +
+        '<td><strong>' + fmtInt(Number(r.tiny_total)) + '</strong></td>' +
+        '<td><strong>' + fmtInt(Number(r.wms_comparado)) + '</strong> <span style="color:var(--ink-3); font-size:.76rem;">(PS ' + fmtInt(Number(r.wms_ps)) + (Number(r.wms_rc) ? ' + RC ' + fmtInt(Number(r.wms_rc)) : '') + (Number(r.wms_full) ? ' + Full ' + fmtInt(Number(r.wms_full)) : '') + ')</span></td>' +
+        '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + (dif > 0 ? "+" : "") + fmtInt(dif) + '</td>' +
+        '<td style="color:var(--ink-3);">' + fmtInt(Number(r.wms_mv)) + '</td>' +
+        '<td style="color:' + acurCor(it.acuracidade_antes) + ';">' + acurPct(it.acuracidade_antes) + '</td>' +
+        '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
+        '<td>' + pill + '</td>' +
+      '</tr>';
+    }).join("");
+    var tabela = '<section class="sector"><div class="card">' +
+      '<div class="card-head"><div class="card-title">Última checagem' + (ultimaData ? " · " + acurDataBr(ultimaData) : "") + '</div></div>' +
+      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado em</th><th>Contado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>MV (fora)</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th></tr></thead><tbody>' + linhas + '</tbody></table></div>'
+        : '<div style="color:var(--ink-3);">Ainda sem checagem — o Glog roda todo dia às 07h (ou assim que o PC ligar).</div>') +
+      '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo). MV = saldo em movimentadores, não entra na conta.</div>' +
+    '</div></section>';
+
+    var dias = datas.slice(0, 14).reverse();
+    var skus = ativos.map(function(i){ return i.sku; }).sort();
+    var mapa = {}; diaria.forEach(function(r){ mapa[r.sku + "|" + r.data] = r; });
+    var hist = '<section class="sector"><div class="card">' +
+      '<div class="card-head"><div class="card-title">Histórico diário (últimos ' + dias.length + ' dias)</div></div>' +
+      (dias.length ? '<div class="table-wrap"><table><thead><tr><th>SKU</th>' + dias.map(function(d){ return '<th>' + acurDataBr(d).slice(0,5) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+        skus.map(function(s){
+          return '<tr><td><strong>' + escHtml(s) + '</strong></td>' + dias.map(function(d){
+            var r = mapa[s + "|" + d];
+            if (!r) return '<td style="color:var(--ink-3);">—</td>';
+            var cor = Number(r.acuracidade) >= 100 ? "var(--status-good)" : "var(--status-critical)";
+            return '<td title="Tiny ' + fmtInt(Number(r.tiny_total)) + ' × WMS ' + fmtInt(Number(r.wms_comparado)) + '" style="font-weight:700; color:' + cor + '; background:color-mix(in oklab, ' + cor + ' 10%, transparent);">' + acurPct(r.acuracidade) + '</td>';
+          }).join("") + '</tr>';
+        }).join("") + '</tbody></table></div>' : '<div style="color:var(--ink-3);">Sem histórico ainda.</div>') +
+    '</div></section>';
+
+    return kpis + tabela + hist;
+  }
+  function refreshAcuracidade(){
+    if (acurFetching) return;
+    var el = document.getElementById("acuracidade-widget");
+    if (!el) return;
+    if (!sb) { el.innerHTML = '<div class="banner-demo">Não foi possível conectar ao banco de dados (Supabase).</div>'; return; }
+    acurFetching = true;
+    Promise.all([
+      sb.from("acuracidade_itens").select("*"),
+      sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_mv,wms_comparado,acuracidade,status").order("data", {ascending:false}).limit(5000),
+      sb.from("acuracidade_execucao").select("*").order("data", {ascending:false}).limit(1)
+    ]).then(function(res){
+      for (var i = 0; i < res.length; i++) if (res[i].error) throw new Error(res[i].error.message);
+      var target = document.getElementById("acuracidade-widget");
+      if (target) target.innerHTML = renderAcuracidade(res[0].data || [], res[1].data || [], res[2].data || []);
+    }).catch(function(err){
+      var target = document.getElementById("acuracidade-widget");
+      if (target) target.innerHTML = '<div class="banner-demo" style="border-color:var(--status-critical); color:var(--status-critical);">⚠ Não consegui carregar a acuracidade: ' + escHtml(err && err.message ? err.message : String(err)) + '</div>';
+    }).then(function(){ acurFetching = false; });
+  }
+
   /* ============================ PAGE: INBOUND ============================ */
 
   function empresaFilterList(){
@@ -3911,6 +4030,7 @@ try {
 
     switch(state.sub.inbound){
       case "inventario": return inventarioHtml;
+      case "acuracidade": return acuracidadeHtmlPage();
       case "armazenagem": return armazenagemHtml;
       case "abastecimento": return abastecimentoHtml;
       case "rastreabilidade": return rastreabilidadeHtml;
@@ -4814,6 +4934,7 @@ try {
     wireInteractions();
     if (state.page === "geral") refreshTinyOutbound();
     if (state.page === "outbound") refreshHistoricoOutbound();
+    if (state.page === "inbound" && state.sub.inbound === "acuracidade") refreshAcuracidade();
     if (state.fullHighlight !== null){
       var hlId = state.fullHighlight;
       var hlTarget = root.querySelector('[data-full-card="' + hlId + '"]');
