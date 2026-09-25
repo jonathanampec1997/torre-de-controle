@@ -3608,9 +3608,26 @@ try {
   /* ============================ ACURACIDADE (itens inventariados) ============================ */
   // Checagem diária feita pelo Glog às 07h (glog/src/lib/acuracidade.ts):
   // lista = coluna INVENTARIADO da aba Resumo da planilha de inventário;
-  // Tiny = Geral Ampec PR + Ampec SC; WMS = PS + RC + Full AR000000010556
-  // (MV fora). Acuracidade = 1 − |WMS − Tiny| ÷ Tiny. Aqui só lê o Supabase.
+  // Tiny = Geral Ampec PR + Ampec SC; WMS = PS + RC + Full AR000000010556.
+  // Acuracidade = 1 − |WMS − Tiny| ÷ Tiny. Aqui só lê o Supabase — exceto as
+  // observações/plano de ação por SKU (acuracidade_observacoes), que o time
+  // cria, edita e apaga por aqui. O histórico (acuracidade_diaria) nunca é
+  // apagado; fica minimizado e só carrega quando alguém abre.
   var acurFetching = false;
+  var acur = {
+    cache:null,            // {itens, ultima, ultimaData, execs, obs}
+    hist:null,             // linhas completas do histórico (carregado ao abrir)
+    histAberto:false, histCarregando:false, histErro:null,
+    obsAberto:{},          // sku -> true
+    rascunho:{},           // sku -> texto novo sendo digitado
+    editando:null,         // id da observação em edição
+    editTexto:"",
+    apagando:null,         // id aguardando confirmação
+    autor:"",
+    salvando:false, erro:null
+  };
+  try { acur.autor = localStorage.getItem("acur-autor") || ""; } catch(e) {}
+
   function acurPct(v){
     if (v === null || v === undefined || v === "") return "—";
     var n = Number(v);
@@ -3639,29 +3656,92 @@ try {
     return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full), checado todo dia às 07h. Alerta no Slack quando sair de 100%.</p></div></div>' +
       '<div class="content"><div id="acuracidade-widget"><div class="card" style="color:var(--ink-3);">Carregando…</div></div></div>';
   }
-  function renderAcuracidade(itens, diaria, execs){
-    var ativos = itens.filter(function(i){ return i.ativo; });
-    var porSkuItem = {}; itens.forEach(function(i){ porSkuItem[i.sku] = i; });
-    var datas = []; diaria.forEach(function(r){ if (datas.indexOf(r.data) < 0) datas.push(r.data); });
-    datas.sort().reverse();
-    var ultimaData = datas[0] || null;
-    var hoje = diaria.filter(function(r){ return r.data === ultimaData && porSkuItem[r.sku] && porSkuItem[r.sku].ativo; });
+
+  function acurObsPainel(sku, obs){
+    var lista = obs.filter(function(o){ return o.sku === sku; });
+    var itens = lista.map(function(o){
+      var cab = '<div style="color:var(--ink-3); font-size:.74rem;">' + acurHora(o.criado_em) +
+        (o.autor ? ' · ' + escHtml(o.autor) : '') +
+        (o.atualizado_em && o.atualizado_em !== o.criado_em && new Date(o.atualizado_em) - new Date(o.criado_em) > 60000 ? ' · editado ' + acurHora(o.atualizado_em) : '') + '</div>';
+      if (acur.editando === o.id){
+        return '<div style="padding:8px 0; border-bottom:1px solid var(--border);">' + cab +
+          '<div class="form-field"><textarea data-acur-edit-texto="' + o.id + '" style="min-height:70px; width:100%;">' + escHtml(acur.editTexto) + '</textarea></div>' +
+          '<div class="btn-row" style="margin-top:6px;"><button class="btn-small" data-acur-act="salvar-edicao" data-id="' + o.id + '"' + (acur.salvando ? ' disabled' : '') + '>Salvar</button>' +
+          '<button class="btn-small" data-acur-act="cancelar-edicao">Cancelar</button></div></div>';
+      }
+      var botoes = acur.apagando === o.id
+        ? '<span style="font-size:.78rem; color:var(--status-critical); font-weight:700;">Apagar esta observação?</span> <button class="btn-danger" data-acur-act="confirmar-apagar" data-id="' + o.id + '">Sim, apagar</button> <button class="btn-small" data-acur-act="cancelar-apagar">Não</button>'
+        : '<button class="btn-small" data-acur-act="editar" data-id="' + o.id + '">Editar</button> <button class="btn-danger" data-acur-act="apagar" data-id="' + o.id + '">Apagar</button>';
+      return '<div style="padding:8px 0; border-bottom:1px solid var(--border);">' + cab +
+        '<div style="white-space:pre-wrap; margin:4px 0 6px; color:var(--ink);">' + escHtml(o.texto) + '</div>' +
+        '<div class="btn-row">' + botoes + '</div></div>';
+    }).join("");
+    return '<div style="padding:6px 4px 10px; white-space:normal;">' +
+      '<div style="font-weight:700; margin-bottom:4px;">Observações / plano de ação — ' + escHtml(sku) + '</div>' +
+      (itens || '<div style="color:var(--ink-3); font-size:.8rem; padding:4px 0;">Nenhuma observação ainda.</div>') +
+      '<div class="form-field" style="margin-top:10px;"><textarea data-acur-rascunho="' + escHtml(sku) + '" placeholder="O que foi encontrado, o que foi feito para resolver a divergência…" style="min-height:70px; width:100%;">' + escHtml(acur.rascunho[sku] || "") + '</textarea></div>' +
+      '<div class="btn-row" style="margin-top:6px;">' +
+        '<input class="search-input" type="text" data-acur-autor placeholder="Seu nome (opcional)" value="' + escHtml(acur.autor) + '">' +
+        '<button class="btn-primary" data-acur-act="adicionar" data-sku="' + escHtml(sku) + '"' + (acur.salvando ? ' disabled' : '') + '>Salvar observação</button>' +
+      '</div>' +
+      (acur.erro ? '<div style="color:var(--status-critical); font-size:.8rem; margin-top:6px;">⚠ ' + escHtml(acur.erro) + '</div>' : '') +
+    '</div>';
+  }
+
+  function acurHistoricoHtml(){
+    var total = acur.hist ? acur.hist.length : null;
+    var cab = '<div class="card-head" style="cursor:pointer;" data-acur-act="toggle-hist">' +
+      '<div class="card-title">' + (acur.histAberto ? "▾" : "▸") + ' Histórico completo' + (total !== null ? ' (' + fmtInt(total) + ' registros)' : '') + '</div>' +
+      '<span style="color:var(--ink-3); font-size:.78rem;">' + (acur.histAberto ? "clique para minimizar" : "clique para abrir — fica salvo para sempre") + '</span></div>';
+    if (!acur.histAberto) return '<section class="sector"><div class="card">' + cab + '</div></section>';
+    var corpo;
+    if (acur.histCarregando) corpo = '<div style="color:var(--ink-3);">Carregando histórico…</div>';
+    else if (acur.histErro) corpo = '<div style="color:var(--status-critical);">⚠ ' + escHtml(acur.histErro) + '</div>';
+    else if (!acur.hist || !acur.hist.length) corpo = '<div style="color:var(--ink-3);">Sem histórico ainda.</div>';
+    else {
+      var datasInv = {}; (acur.cache ? acur.cache.itens : []).forEach(function(i){ datasInv[i.sku] = i.data_inventario; });
+      corpo = '<div class="btn-row" style="margin-bottom:8px;"><input class="search-input" type="text" placeholder="Filtrar por SKU…" data-acur-hist-filtro></div>' +
+        '<div class="table-wrap" style="max-height:480px; overflow-y:auto;"><table><thead><tr><th>Checagem</th><th>SKU</th><th>Data</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acuracidade</th><th>Status</th></tr></thead><tbody>' +
+        acur.hist.map(function(r){
+          var dif = Number(r.wms_comparado) - Number(r.tiny_total);
+          return '<tr data-acur-hist-sku="' + escHtml(String(r.sku).toUpperCase()) + '">' +
+            '<td>' + acurDataBr(r.data) + '</td><td><strong>' + escHtml(r.sku) + '</strong></td>' +
+            '<td>' + acurDataBr(datasInv[r.sku]) + '</td>' +
+            '<td>' + fmtInt(Number(r.contado)) + '</td><td>' + fmtInt(Number(r.tiny_pr)) + '</td><td>' + fmtInt(Number(r.tiny_sc)) + '</td>' +
+            '<td>' + fmtInt(Number(r.tiny_total)) + '</td><td>' + fmtInt(Number(r.wms_comparado)) + '</td>' +
+            '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + (dif > 0 ? "+" : "") + fmtInt(dif) + '</td>' +
+            '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
+            '<td>' + (r.status === "OK" ? '<span class="pill done">OK</span>' : '<span class="pill critical">' + escHtml(r.status) + '</span>') + '</td></tr>';
+        }).join("") + '</tbody></table></div>';
+    }
+    return '<section class="sector"><div class="card">' + cab + corpo + '</div></section>';
+  }
+
+  function renderAcuracidade(){
+    var c = acur.cache;
+    var ativos = c.itens.filter(function(i){ return i.ativo; });
+    var porSkuItem = {}; c.itens.forEach(function(i){ porSkuItem[i.sku] = i; });
+    var hoje = c.ultima.filter(function(r){ return porSkuItem[r.sku] && porSkuItem[r.sku].ativo; });
     hoje.sort(function(a,b){ return ((a.status === "OK") - (b.status === "OK")) || a.sku.localeCompare(b.sku); });
     var ok = hoje.filter(function(r){ return r.status === "OK"; }).length;
     var div = hoje.length - ok;
-    var exec = execs[0] || null;
+    var exec = c.execs[0] || null;
+    var obsPorSku = {}; c.obs.forEach(function(o){ obsPorSku[o.sku] = (obsPorSku[o.sku] || 0) + 1; });
 
     var kpis = '<section class="sector"><div class="kpi-grid">' +
       acurKpi("Itens monitorados", fmtInt(ativos.length), "coluna INVENTARIADO da planilha") +
-      acurKpi("100% na última checagem", fmtInt(ok), ultimaData ? acurDataBr(ultimaData) : "ainda sem checagem", "var(--status-good)") +
+      acurKpi("100% na última checagem", fmtInt(ok), c.ultimaData ? acurDataBr(c.ultimaData) : "ainda sem checagem", "var(--status-good)") +
       acurKpi("Divergentes", fmtInt(div), div ? "abaixo de 100%" : "tudo batendo", div ? "var(--status-critical)" : "var(--status-good)") +
       acurKpi("Última checagem", exec ? acurHora(exec.concluido_em) : "—", exec ? ("Slack: " + (/SLACK_BOT_TOKEN/.test(exec.slack_status || "") ? "ainda não configurado" : escHtml(exec.slack_status || "—"))) : "") +
     '</div></section>';
 
+    var NCOL = 11;
     var linhas = hoje.map(function(r){
       var it = porSkuItem[r.sku] || {};
       var dif = Number(r.wms_comparado) - Number(r.tiny_total);
       var pill = r.status === "OK" ? '<span class="pill done">OK</span>' : '<span class="pill critical">' + escHtml(r.status) + '</span>';
+      var n = obsPorSku[r.sku] || 0;
+      var aberto = !!acur.obsAberto[r.sku];
       return '<tr>' +
         '<td>' + acurDataBr(it.data_inventario) + '</td>' +
         '<td><strong>' + escHtml(r.sku) + '</strong></td>' +
@@ -3674,51 +3754,170 @@ try {
         '<td style="color:' + acurCor(it.acuracidade_antes) + ';">' + acurPct(it.acuracidade_antes) + '</td>' +
         '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
         '<td>' + pill + '</td>' +
-      '</tr>';
+        '<td><button class="btn-small" data-acur-act="toggle-obs" data-sku="' + escHtml(r.sku) + '">' + (aberto ? "▾ " : "📝 ") + (n ? n + (n === 1 ? " obs." : " obs.") : "Adicionar") + '</button></td>' +
+      '</tr>' +
+      (aberto ? '<tr><td colspan="' + (NCOL + 1) + '" style="background:var(--surface-2);">' + acurObsPainel(r.sku, c.obs) + '</td></tr>' : '');
     }).join("");
     var tabela = '<section class="sector"><div class="card">' +
-      '<div class="card-head"><div class="card-title">Última checagem' + (ultimaData ? " · " + acurDataBr(ultimaData) : "") + '</div></div>' +
-      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th></tr></thead><tbody>' + linhas + '</tbody></table></div>'
+      '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + '</div></div>' +
+      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th><th>Observações</th></tr></thead><tbody>' + linhas + '</tbody></table></div>'
         : '<div style="color:var(--ink-3);">Ainda sem checagem — o Glog roda todo dia às 07h (ou assim que o PC ligar).</div>') +
-      '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo). Data = dia do inventário (ajuste no Tiny).</div>' +
+      '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Data = dia do inventário (ajuste no Tiny). Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo).</div>' +
     '</div></section>';
 
-    var dias = datas.slice(0, 14).reverse();
-    var skus = ativos.map(function(i){ return i.sku; }).sort();
-    var mapa = {}; diaria.forEach(function(r){ mapa[r.sku + "|" + r.data] = r; });
-    var hist = '<section class="sector"><div class="card">' +
-      '<div class="card-head"><div class="card-title">Histórico diário (últimos ' + dias.length + ' dias)</div></div>' +
-      (dias.length ? '<div class="table-wrap"><table><thead><tr><th>SKU</th>' + dias.map(function(d){ return '<th>' + acurDataBr(d).slice(0,5) + '</th>'; }).join("") + '</tr></thead><tbody>' +
-        skus.map(function(s){
-          return '<tr><td><strong>' + escHtml(s) + '</strong></td>' + dias.map(function(d){
-            var r = mapa[s + "|" + d];
-            if (!r) return '<td style="color:var(--ink-3);">—</td>';
-            var cor = Number(r.acuracidade) >= 100 ? "var(--status-good)" : "var(--status-critical)";
-            return '<td title="Tiny ' + fmtInt(Number(r.tiny_total)) + ' × WMS ' + fmtInt(Number(r.wms_comparado)) + '" style="font-weight:700; color:' + cor + '; background:color-mix(in oklab, ' + cor + ' 10%, transparent);">' + acurPct(r.acuracidade) + '</td>';
-          }).join("") + '</tr>';
-        }).join("") + '</tbody></table></div>' : '<div style="color:var(--ink-3);">Sem histórico ainda.</div>') +
-    '</div></section>';
-
-    return kpis + tabela + hist;
+    return kpis + tabela + acurHistoricoHtml();
   }
+
+  function acurPintar(){
+    var target = document.getElementById("acuracidade-widget");
+    if (!target || !acur.cache) return;
+    // Guarda foco/cursor de um campo sendo digitado (re-render por realtime não pode apagar o que a pessoa escreve).
+    var ativo = document.activeElement, chave = null, pos = null;
+    if (ativo && target.contains(ativo)){
+      chave = ["data-acur-rascunho","data-acur-edit-texto","data-acur-autor","data-acur-hist-filtro"].filter(function(a){ return ativo.hasAttribute(a); })[0] || null;
+      if (chave) { chave = '[' + chave + (ativo.getAttribute(chave) ? '="' + ativo.getAttribute(chave) + '"' : '') + ']'; try { pos = ativo.selectionStart; } catch(e) {} }
+    }
+    var filtro = target.querySelector("[data-acur-hist-filtro]");
+    var filtroValor = filtro ? filtro.value : "";
+    target.innerHTML = renderAcuracidade();
+    var novoFiltro = target.querySelector("[data-acur-hist-filtro]");
+    if (novoFiltro && filtroValor) { novoFiltro.value = filtroValor; acurFiltrarHist(filtroValor); }
+    if (chave){
+      var el = target.querySelector(chave);
+      if (el) { el.focus(); try { if (pos !== null) el.setSelectionRange(pos, pos); } catch(e) {} }
+    }
+    acurWire(target);
+  }
+
+  function acurFiltrarHist(valor){
+    var q = String(valor || "").trim().toUpperCase();
+    document.querySelectorAll("#acuracidade-widget [data-acur-hist-sku]").forEach(function(tr){
+      tr.style.display = !q || tr.getAttribute("data-acur-hist-sku").indexOf(q) >= 0 ? "" : "none";
+    });
+  }
+
+  async function acurCarregarHistorico(){
+    acur.histCarregando = true; acur.histErro = null; acurPintar();
+    try {
+      var todas = [], passo = 1000;
+      for (var de = 0; de < 1000000; de += passo){
+        var res = await sb.from("acuracidade_diaria")
+          .select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_comparado,acuracidade,status")
+          .order("data", {ascending:false}).order("sku").range(de, de + passo - 1);
+        if (res.error) throw new Error(res.error.message);
+        todas = todas.concat(res.data || []);
+        if (!res.data || res.data.length < passo) break;
+      }
+      acur.hist = todas;
+    } catch(err) {
+      acur.histErro = "Não consegui carregar o histórico: " + (err && err.message ? err.message : String(err));
+    }
+    acur.histCarregando = false; acurPintar();
+  }
+
+  async function acurRecarregarObs(){
+    var res = await sb.from("acuracidade_observacoes").select("*").order("criado_em", {ascending:false});
+    if (res.error) throw new Error(res.error.message);
+    if (acur.cache) acur.cache.obs = res.data || [];
+  }
+
+  async function acurAcao(act, el){
+    var id = el.getAttribute("data-id"), sku = el.getAttribute("data-sku");
+    acur.erro = null;
+    if (act === "toggle-hist"){
+      acur.histAberto = !acur.histAberto;
+      if (acur.histAberto && !acur.hist) return acurCarregarHistorico();
+      return acurPintar();
+    }
+    if (act === "toggle-obs"){ acur.obsAberto[sku] = !acur.obsAberto[sku]; return acurPintar(); }
+    if (act === "editar"){
+      var o = acur.cache.obs.filter(function(x){ return x.id === id; })[0];
+      acur.editando = id; acur.editTexto = o ? o.texto : ""; acur.apagando = null; acurPintar();
+      var campo = document.querySelector('[data-acur-edit-texto="' + id + '"]');
+      if (campo) { campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length); }
+      return;
+    }
+    if (act === "cancelar-edicao"){ acur.editando = null; return acurPintar(); }
+    if (act === "apagar"){ acur.apagando = id; acur.editando = null; return acurPintar(); }
+    if (act === "cancelar-apagar"){ acur.apagando = null; return acurPintar(); }
+    if (acur.salvando) return;
+    acur.salvando = true; acurPintar();
+    try {
+      var res;
+      if (act === "adicionar"){
+        var texto = String(acur.rascunho[sku] || "").trim();
+        if (!texto) throw new Error("Escreva a observação antes de salvar.");
+        res = await sb.from("acuracidade_observacoes").insert({sku:sku, texto:texto, autor:acur.autor.trim() || null, data_ref:acur.cache.ultimaData});
+        if (res.error) throw new Error(res.error.message);
+        acur.rascunho[sku] = "";
+      } else if (act === "salvar-edicao"){
+        var t = String(acur.editTexto || "").trim();
+        if (!t) throw new Error("A observação não pode ficar vazia — use Apagar se quiser remover.");
+        res = await sb.from("acuracidade_observacoes").update({texto:t, atualizado_em:new Date().toISOString()}).eq("id", id);
+        if (res.error) throw new Error(res.error.message);
+        acur.editando = null;
+      } else if (act === "confirmar-apagar"){
+        res = await sb.from("acuracidade_observacoes").delete().eq("id", id);
+        if (res.error) throw new Error(res.error.message);
+        acur.apagando = null;
+      }
+      await acurRecarregarObs();
+    } catch(err) {
+      acur.erro = err && err.message ? err.message : String(err);
+    }
+    acur.salvando = false; acurPintar();
+  }
+
+  function acurWire(target){
+    if (target.__acurWired) return;
+    target.__acurWired = true;
+    target.addEventListener("click", function(ev){
+      var el = ev.target.closest("[data-acur-act]");
+      if (!el || !target.contains(el) || el.disabled) return;
+      acurAcao(el.getAttribute("data-acur-act"), el);
+    });
+    target.addEventListener("input", function(ev){
+      var el = ev.target;
+      if (el.hasAttribute("data-acur-rascunho")) acur.rascunho[el.getAttribute("data-acur-rascunho")] = el.value;
+      else if (el.hasAttribute("data-acur-edit-texto")) acur.editTexto = el.value;
+      else if (el.hasAttribute("data-acur-autor")) { acur.autor = el.value; try { localStorage.setItem("acur-autor", el.value); } catch(e) {} }
+      else if (el.hasAttribute("data-acur-hist-filtro")) acurFiltrarHist(el.value);
+    });
+  }
+
   function refreshAcuracidade(){
-    if (acurFetching) return;
     var el = document.getElementById("acuracidade-widget");
     if (!el) return;
+    if (acur.cache) acurPintar();
+    if (acurFetching) return;
     if (!sb) { el.innerHTML = '<div class="banner-demo">Não foi possível conectar ao banco de dados (Supabase).</div>'; return; }
     acurFetching = true;
-    Promise.all([
-      sb.from("acuracidade_itens").select("*"),
-      sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_mv,wms_comparado,acuracidade,status").order("data", {ascending:false}).limit(5000),
-      sb.from("acuracidade_execucao").select("*").order("data", {ascending:false}).limit(1)
-    ]).then(function(res){
-      for (var i = 0; i < res.length; i++) if (res[i].error) throw new Error(res[i].error.message);
-      var target = document.getElementById("acuracidade-widget");
-      if (target) target.innerHTML = renderAcuracidade(res[0].data || [], res[1].data || [], res[2].data || []);
+    sb.from("acuracidade_diaria").select("data").order("data", {ascending:false}).limit(1).then(function(r0){
+      if (r0.error) throw new Error(r0.error.message);
+      var ultimaData = r0.data && r0.data[0] ? r0.data[0].data : null;
+      return Promise.all([
+        sb.from("acuracidade_itens").select("*"),
+        ultimaData ? sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_comparado,acuracidade,status").eq("data", ultimaData) : Promise.resolve({data:[]}),
+        sb.from("acuracidade_execucao").select("*").order("data", {ascending:false}).limit(1),
+        sb.from("acuracidade_observacoes").select("*").order("criado_em", {ascending:false})
+      ]).then(function(res){
+        for (var i = 0; i < res.length; i++) if (res[i].error) throw new Error(res[i].error.message);
+        acur.cache = {itens:res[0].data || [], ultima:res[1].data || [], ultimaData:ultimaData, execs:res[2].data || [], obs:res[3].data || []};
+        acurPintar();
+      });
     }).catch(function(err){
       var target = document.getElementById("acuracidade-widget");
       if (target) target.innerHTML = '<div class="banner-demo" style="border-color:var(--status-critical); color:var(--status-critical);">⚠ Não consegui carregar a acuracidade: ' + escHtml(err && err.message ? err.message : String(err)) + '</div>';
     }).then(function(){ acurFetching = false; });
+  }
+
+  // Observação criada/editada/apagada por outra pessoa aparece sem recarregar.
+  if (!window.__acurObsRealtime){
+    window.__acurObsRealtime = true;
+    subscribeTable("acuracidade_observacoes", function(){
+      if (!document.getElementById("acuracidade-widget") || !acur.cache) return;
+      acurRecarregarObs().then(acurPintar, function(){});
+    });
   }
 
   /* ============================ PAGE: INBOUND ============================ */
@@ -4919,6 +5118,7 @@ try {
 
   function render(){
     var root = document.getElementById("root");
+    try { localStorage.setItem("tdc-pagina", JSON.stringify({page:state.page, sub:state.sub})); } catch(e) {}
     var pageHtml;
     if (state.page === "geral") pageHtml = pageGeral();
     else if (state.page === "inbound") pageHtml = pageInbound();
@@ -5853,6 +6053,23 @@ try {
     if (state.navExpanded !== null && !lastClickInsideNavGroup){ state.navExpanded = null; changed = true; }
     if (changed) render();
   });
+
+  // Ao atualizar a página (F5), volta para a mesma página/aba que estava
+  // aberta, em vez de sempre cair na Visão Geral. Só neste navegador.
+  try {
+    var PAGINAS_VALIDAS = ["geral","inbound","outbound","fulfillment","ajuda","insumos","fontes","configuracoes"];
+    var paginaSalva = JSON.parse(localStorage.getItem("tdc-pagina") || "null");
+    if (paginaSalva && PAGINAS_VALIDAS.indexOf(paginaSalva.page) >= 0){
+      state.page = paginaSalva.page;
+      if (paginaSalva.sub && typeof paginaSalva.sub === "object"){
+        Object.keys(state.sub).forEach(function(g){
+          var v = paginaSalva.sub[g];
+          var opcoes = (NAV_SUBS[g] || []).map(function(x){ return x.id; });
+          if (typeof v === "string" && (opcoes.length === 0 || opcoes.indexOf(v) >= 0)) state.sub[g] = v;
+        });
+      }
+    }
+  } catch(e) {}
 
   if (!sb){
     document.getElementById("root").innerHTML = '<div style="padding:40px;text-align:center;color:#a33;font-family:sans-serif;">Não foi possível conectar ao banco de dados (Supabase). Verifique sua conexão e recarregue a página.</div>';
