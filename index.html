@@ -3663,16 +3663,14 @@ try {
       var dif = Number(r.wms_comparado) - Number(r.tiny_total);
       var pill = r.status === "OK" ? '<span class="pill done">OK</span>' : '<span class="pill critical">' + escHtml(r.status) + '</span>';
       return '<tr>' +
-        '<td>' + acurDataBr(r.data) + '</td>' +
-        '<td><strong>' + escHtml(r.sku) + '</strong></td>' +
         '<td>' + acurDataBr(it.data_inventario) + '</td>' +
+        '<td><strong>' + escHtml(r.sku) + '</strong></td>' +
         '<td>' + fmtInt(Number(r.contado)) + '</td>' +
         '<td>' + fmtInt(Number(r.tiny_pr)) + '</td>' +
         '<td>' + fmtInt(Number(r.tiny_sc)) + '</td>' +
         '<td><strong>' + fmtInt(Number(r.tiny_total)) + '</strong></td>' +
         '<td><strong>' + fmtInt(Number(r.wms_comparado)) + '</strong> <span style="color:var(--ink-3); font-size:.76rem;">(PS ' + fmtInt(Number(r.wms_ps)) + (Number(r.wms_rc) ? ' + RC ' + fmtInt(Number(r.wms_rc)) : '') + (Number(r.wms_full) ? ' + Full ' + fmtInt(Number(r.wms_full)) : '') + ')</span></td>' +
         '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + (dif > 0 ? "+" : "") + fmtInt(dif) + '</td>' +
-        '<td style="color:var(--ink-3);">' + fmtInt(Number(r.wms_mv)) + '</td>' +
         '<td style="color:' + acurCor(it.acuracidade_antes) + ';">' + acurPct(it.acuracidade_antes) + '</td>' +
         '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
         '<td>' + pill + '</td>' +
@@ -3680,9 +3678,9 @@ try {
     }).join("");
     var tabela = '<section class="sector"><div class="card">' +
       '<div class="card-head"><div class="card-title">Última checagem' + (ultimaData ? " · " + acurDataBr(ultimaData) : "") + '</div></div>' +
-      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado em</th><th>Contado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>MV (fora)</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th></tr></thead><tbody>' + linhas + '</tbody></table></div>'
+      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th></tr></thead><tbody>' + linhas + '</tbody></table></div>'
         : '<div style="color:var(--ink-3);">Ainda sem checagem — o Glog roda todo dia às 07h (ou assim que o PC ligar).</div>') +
-      '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo). MV = saldo em movimentadores, não entra na conta.</div>' +
+      '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo). Data = dia do inventário (ajuste no Tiny).</div>' +
     '</div></section>';
 
     var dias = datas.slice(0, 14).reverse();
