@@ -3624,8 +3624,10 @@ try {
     editTexto:"",
     apagando:null,         // id aguardando confirmação
     autor:"",
-    salvando:false, erro:null
+    salvando:false, erro:null,
+    pagina:1               // paginação da tabela da última checagem (20 SKUs por página)
   };
+  var ACUR_POR_PAGINA = 20;
   try { acur.autor = localStorage.getItem("acur-autor") || ""; } catch(e) {}
 
   function acurPct(v){
@@ -3727,6 +3729,23 @@ try {
     var div = hoje.length - ok;
     var exec = c.execs[0] || null;
     var obsPorSku = {}; c.obs.forEach(function(o){ obsPorSku[o.sku] = (obsPorSku[o.sku] || 0) + 1; });
+    var totalPaginas = Math.max(1, Math.ceil(hoje.length / ACUR_POR_PAGINA));
+    if (acur.pagina > totalPaginas) acur.pagina = totalPaginas;
+    if (acur.pagina < 1) acur.pagina = 1;
+    var inicio = (acur.pagina - 1) * ACUR_POR_PAGINA;
+    var hojePagina = hoje.slice(inicio, inicio + ACUR_POR_PAGINA);
+    var paginador = totalPaginas <= 1 ? '' :
+      '<div class="btn-row" style="margin-top:10px; justify-content:space-between;">' +
+        '<span style="color:var(--ink-3); font-size:.8rem;">Mostrando ' + (inicio + 1) + '–' + (inicio + hojePagina.length) + ' de ' + hoje.length + ' SKUs</span>' +
+        '<div class="btn-row">' +
+          '<button class="btn-small" data-acur-act="pagina" data-pag="' + (acur.pagina - 1) + '"' + (acur.pagina === 1 ? ' disabled' : '') + '>‹ Anterior</button>' +
+          Array.apply(null, Array(totalPaginas)).map(function(_, i){
+            var n = i + 1, atual = n === acur.pagina;
+            return '<button class="btn-small" data-acur-act="pagina" data-pag="' + n + '"' + (atual ? ' style="background:var(--accent); color:var(--accent-ink); border-color:var(--accent);"' : '') + '>' + n + '</button>';
+          }).join("") +
+          '<button class="btn-small" data-acur-act="pagina" data-pag="' + (acur.pagina + 1) + '"' + (acur.pagina === totalPaginas ? ' disabled' : '') + '>Próxima ›</button>' +
+        '</div>' +
+      '</div>';
 
     var kpis = '<section class="sector"><div class="kpi-grid">' +
       acurKpi("Itens monitorados", fmtInt(ativos.length), "coluna INVENTARIADO da planilha") +
@@ -3736,7 +3755,7 @@ try {
     '</div></section>';
 
     var NCOL = 11;
-    var linhas = hoje.map(function(r){
+    var linhas = hojePagina.map(function(r){
       var it = porSkuItem[r.sku] || {};
       var dif = Number(r.wms_comparado) - Number(r.tiny_total);
       var pill = r.status === "OK" ? '<span class="pill done">OK</span>' : '<span class="pill critical">' + escHtml(r.status) + '</span>';
@@ -3759,8 +3778,8 @@ try {
       (aberto ? '<tr><td colspan="' + (NCOL + 1) + '" style="background:var(--surface-2);">' + acurObsPainel(r.sku, c.obs) + '</td></tr>' : '');
     }).join("");
     var tabela = '<section class="sector"><div class="card">' +
-      '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + '</div></div>' +
-      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th><th>Observações</th></tr></thead><tbody>' + linhas + '</tbody></table></div>'
+      '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + (hoje.length ? " · " + hoje.length + " SKUs" : "") + '</div></div>' +
+      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th><th>Observações</th></tr></thead><tbody>' + linhas + '</tbody></table></div>' + paginador
         : '<div style="color:var(--ink-3);">Ainda sem checagem — o Glog roda todo dia às 07h (ou assim que o PC ligar).</div>') +
       '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Data = dia do inventário (ajuste no Tiny). Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo).</div>' +
     '</div></section>';
@@ -3828,6 +3847,13 @@ try {
       acur.histAberto = !acur.histAberto;
       if (acur.histAberto && !acur.hist) return acurCarregarHistorico();
       return acurPintar();
+    }
+    if (act === "pagina"){
+      acur.pagina = Number(el.getAttribute("data-pag")) || 1;
+      acurPintar();
+      var card = document.querySelector("#acuracidade-widget .table-wrap");
+      if (card) card.scrollIntoView({block:"nearest"});
+      return;
     }
     if (act === "toggle-obs"){ acur.obsAberto[sku] = !acur.obsAberto[sku]; return acurPintar(); }
     if (act === "editar"){
@@ -3909,6 +3935,21 @@ try {
       var target = document.getElementById("acuracidade-widget");
       if (target) target.innerHTML = '<div class="banner-demo" style="border-color:var(--status-critical); color:var(--status-critical);">⚠ Não consegui carregar a acuracidade: ' + escHtml(err && err.message ? err.message : String(err)) + '</div>';
     }).then(function(){ acurFetching = false; });
+  }
+
+  // Checagem nova (07h ou manual) ou lista de itens alterada: recarrega sozinho
+  // quem estiver com a aba aberta — antes só buscava ao abrir a aba, e quem já
+  // estava com ela aberta continuava vendo a lista antiga (visto 26/09).
+  if (!window.__acurDadosRealtime){
+    window.__acurDadosRealtime = true;
+    var acurRecarregar = function(){
+      if (!document.getElementById("acuracidade-widget")) return;
+      refreshAcuracidade();
+      if (acur.histAberto) acurCarregarHistorico(); else acur.hist = null;
+    };
+    subscribeTable("acuracidade_execucao", acurRecarregar);
+    subscribeTable("acuracidade_itens", acurRecarregar);
+    setInterval(function(){ if (document.getElementById("acuracidade-widget")) refreshAcuracidade(); }, 5*60*1000);
   }
 
   // Observação criada/editada/apagada por outra pessoa aparece sem recarregar.
