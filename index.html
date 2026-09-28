@@ -2881,6 +2881,9 @@ try {
   var TINY_FORMA_NOME_EXIBICAO = { mercado_livre: "Mercado Livre", shopee: "Shopee" };
   var tinyHorarios = null; // {PR:{mercado_livre:{0:{horario_corte,horario_coleta},...}, shopee:{...}}, EDN:{mercado_livre:{...}}}
   var tinyUltimoSnapshot = null;
+  // Ordens separadas hoje no WMS (tabela wms_separacao_snapshot, gravada pelo GLog
+  // a cada ~10 min — glog/src/lib/wms-separacao.ts). null = ainda não carregou.
+  var wmsSepUltimo = null;
 
   function tinyHorariosVazios(){
     return {
@@ -3323,10 +3326,43 @@ try {
   }
 
   function renderTinyOutboundWidget(d){
+    // Separação vem do WMS (outra fonte); só vale se o snapshot for de hoje.
+    var sep = (wmsSepUltimo && wmsSepUltimo.data === isoDate(new Date())) ? wmsSepUltimo : null;
+    var sepNota = wmsSepUltimo
+      ? (sep ? "ordens no WMS · atualizado às " + new Date(sep.atualizado_em).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "ainda sem separação hoje")
+      : "carregando do WMS…";
     var kpis = [
-      snapshotCard("Pedidos a embalar (fila atual)", fmtInt(d.pendenteTotal), "", "independente de quando o pedido foi criado"),
+      snapshotCard("Aguardando separação", fmtInt(d.pendenteTotal), "", "independente de quando o pedido foi criado"),
+      snapshotCard("Pedidos separados", sep ? fmtInt(sep.ordens_separadas) : "0", "", sepNota),
       snapshotCard("Pedidos embalados hoje", fmtInt(d.embaladoTotal), "", "atualizado às " + new Date(d.atualizadoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}))
     ];
+
+    // Ordens separadas por usuário + tabela usuário × plataforma (WMS).
+    var separacaoHtml = (function(){
+      if (!sep) return '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Ordens separadas hoje por usuário</div></div><p style="color:var(--ink-3); font-size:.85rem;">' + escHtml(sepNota) + '</p></div>';
+      var porUsuario = sep.por_usuario || {};
+      var tabela = sep.tabela_usuario_plataforma || {};
+      var plats = {};
+      Object.keys(tabela).forEach(function(u){ Object.keys(tabela[u]).forEach(function(pl){ plats[pl] = 1; }); });
+      var platList = Object.keys(plats).sort();
+      var usuarios = Object.keys(porUsuario).sort(function(a,b){ return porUsuario[b]-porUsuario[a]; });
+      var totaisPlat = sep.por_plataforma || {};
+      var tabelaHtml = (usuarios.length && platList.length)
+        ? '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Ordens separadas hoje — usuário × plataforma</div></div>' +
+            '<div class="table-wrap"><table><thead><tr><th>Usuário</th>' + platList.map(function(pl){ return '<th class="num">' + escHtml(pl) + '</th>'; }).join("") + '<th class="num">Total</th></tr></thead><tbody>' +
+            usuarios.map(function(u){
+              var linha = tabela[u] || {};
+              return '<tr><td>' + escHtml(u) + '</td>' + platList.map(function(pl){ return '<td class="num">' + fmtInt(linha[pl]||0) + '</td>'; }).join("") + '<td class="num"><strong>' + fmtInt(porUsuario[u]) + '</strong></td></tr>';
+            }).join("") +
+            '<tr><td><strong>Total</strong></td>' + platList.map(function(pl){ return '<td class="num"><strong>' + fmtInt(totaisPlat[pl]||0) + '</strong></td>'; }).join("") + '<td class="num"><strong>' + fmtInt(sep.ordens_separadas) + '</strong></td></tr>' +
+            '</tbody></table></div>' +
+            '<p style="color:var(--ink-3); font-size:.76rem; margin-top:6px;">Ordem com itens separados por mais de uma pessoa conta para cada uma — por isso a soma por usuário pode passar do total.</p></div>'
+        : "";
+      return '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Ordens separadas hoje por usuário</div>' +
+          '<div class="desc">Total: <strong>' + fmtInt(sep.ordens_separadas) + '</strong> ordens · ' + fmtInt(Number(sep.pecas_separadas)||0) + ' peças — direto do WMS</div></div>' +
+          tinyBarList(porUsuario) +
+        '</div>' + tabelaHtml;
+    })();
 
     var embaladorNota = d.embaladoSemEmbaladorIdentificado > 0
       ? '<p style="color:var(--ink-3); font-size:.78rem; margin-top:6px;">' + fmtInt(d.embaladoSemEmbaladorIdentificado) + ' pedido(s) ainda sem embalador identificado (completando aos poucos a cada atualização).</p>'
@@ -3372,13 +3408,14 @@ try {
         tinyProjecaoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.primeiroEmbaladoEmEDN, d.embaladosPorHoraFormaEDN) +
       '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
-        '<div class="card"><div class="card-head"><div class="card-title">A embalar por forma de envio</div></div>' + tinyBarList(d.pendentePorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
+        '<div class="card"><div class="card-head"><div class="card-title">Aguardando Separação/Plataforma</div></div>' + tinyBarList(d.pendentePorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
         '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por forma de envio</div></div>' + tinyBarList(d.embaladoPorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
       '</div>' +
       '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Embalados hoje por usuário</div></div>' +
         tinyBarList(d.embaladoPorEmbalador) + embaladorNota +
       '</div>' +
       formasTabela +
+      separacaoHtml +
       tinyEmbaladosPorHoraCard("Ampec PR", "tiny-embalados-hora-pr", d.embaladosPorHoraPR, d.primeiroEmbaladoEmPR) +
       tinyEmbaladosPorHoraCard("Ampec SC EDN", "tiny-embalados-hora-edn", d.embaladosPorHoraEDN, d.primeiroEmbaladoEmEDN) +
       '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Horário de pico de aprovação — Ampec PR</div><div class="desc">Quantos pedidos foram aprovados a cada hora, acumulado desde a primeira consulta de hoje.</div></div>' +
@@ -3631,7 +3668,9 @@ try {
     if (!el) return; // não estamos na Visão Geral agora
     if (!sb) { el.innerHTML = renderTinyOutboundError("Não foi possível conectar ao banco de dados (Supabase)."); return; }
     tinyOutboundFetching = true;
-    sb.from("tiny_outbound_snapshot").select("*").eq("id", "atual").maybeSingle()
+    sb.from("wms_separacao_snapshot").select("*").eq("id", "atual").maybeSingle()
+      .then(function(r){ if (!r.error) wmsSepUltimo = r.data || null; }, function(){})
+      .then(function(){ return sb.from("tiny_outbound_snapshot").select("*").eq("id", "atual").maybeSingle(); })
       .then(function(res){
         if (res.error) throw new Error(res.error.message);
         if (!res.data) throw new Error("Ainda sem nenhum dado salvo — aguarde o GLog rodar a primeira consulta.");
