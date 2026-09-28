@@ -3339,7 +3339,7 @@ try {
 
     // Ordens separadas por usuário + tabela usuário × plataforma (WMS).
     var separacaoHtml = (function(){
-      if (!sep) return '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Ordens separadas hoje por usuário</div></div><p style="color:var(--ink-3); font-size:.85rem;">' + escHtml(sepNota) + '</p></div>';
+      if (!sep) return { grafico:'<div class="card"><div class="card-head"><div class="card-title">Ordens separadas hoje por usuário</div></div><p style="color:var(--ink-3); font-size:.85rem;">' + escHtml(sepNota) + '</p></div>', tabela:"" };
       var porUsuario = sep.por_usuario || {};
       var tabela = sep.tabela_usuario_plataforma || {};
       var plats = {};
@@ -3358,10 +3358,13 @@ try {
             '</tbody></table></div>' +
             '<p style="color:var(--ink-3); font-size:.76rem; margin-top:6px;">Ordem com itens separados por mais de uma pessoa conta para cada uma — por isso a soma por usuário pode passar do total.</p></div>'
         : "";
-      return '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Ordens separadas hoje por usuário</div>' +
-          '<div class="desc">Total: <strong>' + fmtInt(sep.ordens_separadas) + '</strong> ordens · ' + fmtInt(Number(sep.pecas_separadas)||0) + ' peças — direto do WMS</div></div>' +
+      return {
+        grafico:'<div class="card"><div class="card-head"><div class="card-title">Ordens separadas hoje por usuário</div></div>' +
           tinyBarList(porUsuario) +
-        '</div>' + tabelaHtml;
+          '<div style="margin-top:8px; font-size:.72rem; color:var(--ink-3);">Total = <strong>' + fmtInt(sep.ordens_separadas) + '</strong> ordens · ' + fmtInt(Number(sep.pecas_separadas)||0) + ' peças — direto do WMS</div>' +
+        '</div>',
+        tabela:tabelaHtml
+      };
     })();
 
     var embaladorNota = d.embaladoSemEmbaladorIdentificado > 0
@@ -3409,13 +3412,16 @@ try {
       '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
         '<div class="card"><div class="card-head"><div class="card-title">Aguardando Separação/Plataforma</div></div>' + tinyBarList(d.pendentePorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
-        '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por forma de envio</div></div>' + tinyBarList(d.embaladoPorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
+        separacaoHtml.grafico +
       '</div>' +
-      '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Embalados hoje por usuário</div></div>' +
-        tinyBarList(d.embaladoPorEmbalador) + embaladorNota +
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
+        '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por forma de envio</div></div>' + tinyBarList(d.embaladoPorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
+        '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por usuário</div></div>' +
+          tinyBarList(d.embaladoPorEmbalador) + embaladorNota +
+        '</div>' +
       '</div>' +
       formasTabela +
-      separacaoHtml +
+      separacaoHtml.tabela +
       tinyEmbaladosPorHoraCard("Ampec PR", "tiny-embalados-hora-pr", d.embaladosPorHoraPR, d.primeiroEmbaladoEmPR) +
       tinyEmbaladosPorHoraCard("Ampec SC EDN", "tiny-embalados-hora-edn", d.embaladosPorHoraEDN, d.primeiroEmbaladoEmEDN) +
       '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Horário de pico de aprovação — Ampec PR</div><div class="desc">Quantos pedidos foram aprovados a cada hora, acumulado desde a primeira consulta de hoje.</div></div>' +
