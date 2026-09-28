@@ -2967,6 +2967,49 @@ try {
     return soma/ultimas.length;
   }
 
+  // Semáforo do ritmo (pedido do dono, 2026-09-28): verde = dentro do prazo
+  // (ritmo pelo menos TINY_MARGEM_VERDE acima do necessário, ou fila zerada);
+  // amarelo = no limite (entre o necessário e a margem); vermelho = abaixo do
+  // necessário (ou coleta de hoje já passou com pedido na fila). null = sem
+  // horário de coleta configurado para essa forma hoje → cor neutra.
+  var TINY_MARGEM_VERDE = 1.10;
+  var TINY_COR_STATUS = { verde:"var(--status-good)", amarelo:"var(--status-warning)", vermelho:"var(--status-critical)" };
+  function tinyStatusRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
+    if (!tinyHorarios) return null;
+    var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
+    var embalado = (embaladoPorForma||{})[chaveTiny] || 0;
+    var pendente = (pendentePorForma||{})[chaveTiny] || 0;
+    var atual = tinyRitmoAtualPorHora((embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
+    var alvoColeta = tinyHorarioDeHoje(empresaKey, formaKey, "horario_coleta");
+    if (!alvoColeta) return null;
+    if (pendente <= 0) return { status:"verde", atual:atual, necessario:0, texto:"fila zerada" };
+    if (alvoColeta.getTime() <= Date.now()) return { status:"vermelho", atual:atual, necessario:null, texto:"coleta já passou com " + fmtInt(pendente) + " na fila" };
+    var horasRestantes = Math.max(1, Math.ceil((alvoColeta.getTime()-Date.now())/3600000));
+    var necessario = pendente/horasRestantes;
+    var st = atual >= necessario*TINY_MARGEM_VERDE ? "verde" : atual >= necessario ? "amarelo" : "vermelho";
+    return { status:st, atual:atual, necessario:necessario, texto:fmtDec(atual,1) + "/h · precisa " + fmtDec(necessario,1) + "/h" };
+  }
+  // Nome da forma como aparece nos gráficos mesclados → empresa/forma do ritmo.
+  var TINY_FORMA_GRAFICO = {
+    "Mercado Envios": ["PR","mercado_livre"],
+    "Shopee Envios": ["PR","shopee"],
+    "Mercado Envios (EDN)": ["EDN","mercado_livre"]
+  };
+  function tinyStatusDaFormaGrafico(d, nomeForma){
+    var m = TINY_FORMA_GRAFICO[nomeForma];
+    if (!m) return null;
+    var emp = m[0], forma = m[1];
+    return emp === "PR"
+      ? tinyStatusRitmo("PR", forma, d.embaladoPorFormaEnvioPR, d.pendentePorFormaEnvioPR, d.primeiroEmbaladoEmPR, d.embaladosPorHoraFormaPR)
+      : tinyStatusRitmo("EDN", forma, d.embaladoPorFormaEnvioEDN, d.pendentePorFormaEnvioEDN, d.primeiroEmbaladoEmEDN, d.embaladosPorHoraFormaEDN);
+  }
+  function tinyLegendaRitmo(){
+    var item = function(cor, txt){ return '<span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:10px; height:10px; border-radius:3px; background:' + cor + ';"></span>' + txt + '</span>'; };
+    return '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; font-size:.72rem; color:var(--ink-3);">' +
+      item(TINY_COR_STATUS.verde, "dentro do ritmo") + item(TINY_COR_STATUS.amarelo, "no limite") + item(TINY_COR_STATUS.vermelho, "fora do ritmo") +
+      item("var(--ink-3)", "sem horário de coleta") + '</div>';
+  }
+
   function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
@@ -2988,7 +3031,8 @@ try {
       necessarioNum = pendente/horasRestantes;
       necessarioTxt = fmtDec(necessarioNum,1) + " /h";
     }
-    var cor = necessarioNum !== null ? (atual >= necessarioNum ? "var(--status-good)" : "var(--status-critical)") : "var(--ink)";
+    var stRitmo = tinyStatusRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma);
+    var cor = stRitmo ? TINY_COR_STATUS[stRitmo.status] : "var(--ink)";
     return '<div style="flex:1 1 150px; min-width:140px;">' +
       '<div style="font-size:.68rem; font-weight:700; color:var(--ink-2); margin-bottom:3px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
       '<div style="display:flex; gap:14px; flex-wrap:wrap;">' +
@@ -3256,16 +3300,22 @@ try {
     '</div>';
   }
 
-  function tinyBarList(map){
+  // statusDe (opcional): nome → {status, texto} do semáforo de ritmo; sem ele
+  // (ou sem status para aquela linha) a barra fica na cor padrão.
+  function tinyBarList(map, statusDe){
     var entries = Object.keys(map).map(function(k){ return [k, map[k]]; }).sort(function(a,b){ return b[1]-a[1]; });
     if (!entries.length) return '<p style="color:var(--ink-3); font-size:.85rem;">Nenhum pedido.</p>';
     var max = Math.max.apply(null, entries.map(function(e){ return e[1]; }));
     return entries.map(function(e){
       var pct = max ? (e[1]/max*100) : 0;
-      return '<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">' +
-        '<div style="width:150px; flex-shrink:0; font-size:.8rem; color:var(--ink-2);">' + escHtml(e[0]) + '</div>' +
+      var st = statusDe ? statusDe(e[0]) : null;
+      // Com semáforo ligado, linha sem horário de coleta fica cinza (o vermelho da marca confundiria com "fora do ritmo").
+      var cor = st ? TINY_COR_STATUS[st.status] : (statusDe ? "var(--ink-3)" : "var(--accent)");
+      return '<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;"' + (st ? ' title="' + escHtml(st.texto) + '"' : '') + '>' +
+        '<div style="width:150px; flex-shrink:0; font-size:.8rem; color:var(--ink-2);">' + escHtml(e[0]) +
+          (st ? '<div style="font-size:.66rem; color:' + cor + '; font-weight:700;">' + escHtml(st.texto) + '</div>' : '') + '</div>' +
         '<div style="flex:1; height:8px; border-radius:4px; background:var(--surface-2); overflow:hidden;">' +
-          '<div style="height:100%; width:' + pct.toFixed(0) + '%; background:var(--accent); border-radius:4px;"></div>' +
+          '<div style="height:100%; width:' + pct.toFixed(0) + '%; background:' + cor + '; border-radius:4px;"></div>' +
         '</div>' +
         '<div style="width:48px; text-align:right; font-family:\'IBM Plex Mono\',monospace; font-size:.8rem;">' + fmtInt(e[1]) + '</div>' +
       '</div>';
@@ -3322,8 +3372,8 @@ try {
         tinyProjecaoCard("EDN","Ampec SC EDN", d.embaladoPorFormaEnvioEDN, d.primeiroEmbaladoEmEDN, d.embaladosPorHoraFormaEDN) +
       '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
-        '<div class="card"><div class="card-head"><div class="card-title">A embalar por forma de envio</div></div>' + tinyBarList(d.pendentePorFormaEnvio) + '</div>' +
-        '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por forma de envio</div></div>' + tinyBarList(d.embaladoPorFormaEnvio) + '</div>' +
+        '<div class="card"><div class="card-head"><div class="card-title">A embalar por forma de envio</div></div>' + tinyBarList(d.pendentePorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
+        '<div class="card"><div class="card-head"><div class="card-title">Embalados hoje por forma de envio</div></div>' + tinyBarList(d.embaladoPorFormaEnvio, function(f){ return tinyStatusDaFormaGrafico(d, f); }) + tinyLegendaRitmo() + '</div>' +
       '</div>' +
       '<div class="card" style="margin-top:16px;"><div class="card-head"><div class="card-title">Embalados hoje por usuário</div></div>' +
         tinyBarList(d.embaladoPorEmbalador) + embaladorNota +
