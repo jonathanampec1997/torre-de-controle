@@ -3680,7 +3680,7 @@ try {
     return '<span class="pill critical">' + escHtml(status) + '</span>';
   }
   function acuracidadeHtmlPage(){
-    return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full). Checado todo dia às 07h e, os divergentes, de hora em hora até as 19h. Se ainda tem pedido para separar no WMS com o item, ele fica "em conferência" até a separação. Alerta no Slack quando sair de 100%.</p></div></div>' +
+    return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full). Checado todo dia às 07h e atualizado de hora em hora até as 19h. Se ainda tem pedido para separar no WMS com o item, ele fica "em conferência" até a separação. Alerta no Slack quando sair de 100%.</p></div></div>' +
       '<div class="content"><div id="acuracidade-widget"><div class="card" style="color:var(--ink-3);">Carregando…</div></div></div>';
   }
 
@@ -3774,7 +3774,8 @@ try {
       ok:hoje.filter(function(r){ return r.status === "OK"; }).length,
       conferencia:hoje.filter(function(r){ return acurEmConferencia(r.status); }).length,
       html:'<section class="sector"><div class="card">' +
-        '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + (hoje.length ? " · " + hoje.length + " SKUs" : "") + '</div></div>' +
+        '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + (hoje.length ? " · " + hoje.length + " SKUs" : "") + '</div>' +
+          (c.execs[0] ? '<span style="color:var(--ink-3); font-size:.8rem;">🕒 Atualizado em <strong>' + acurHora(c.execs[0].ultima_atualizacao_em || c.execs[0].concluido_em) + '</strong></span>' : '') + '</div>' +
         (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th><th>Observações</th></tr></thead><tbody>' + linhas + '</tbody></table></div>' + paginador
           : '<div style="color:var(--ink-3);">Ainda sem checagem — o GLog roda todo dia às 07h (ou assim que o PC ligar).</div>') +
         '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Data = dia do inventário (ajuste no Tiny). Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo). Horário abaixo do status = última verificação do SKU.</div>' +
@@ -3990,7 +3991,8 @@ try {
       acurKpi("100% agora", fmtInt(tabela.ok), c.ultimaData ? "checagem de " + acurDataBr(c.ultimaData) : "ainda sem checagem", "var(--status-good)") +
       acurKpi("Divergentes", fmtInt(div), div ? abertas + " ocorrência(s) aberta(s) — rechecadas de hora em hora" : "tudo batendo", div ? "var(--status-critical)" : "var(--status-good)") +
       acurKpi("Em conferência", fmtInt(tabela.conferencia), tabela.conferencia ? "aguardando separação no WMS — ainda não entra como divergência" : "nenhum pedido por separar", tabela.conferencia ? "var(--status-warning)" : "var(--ink-3)") +
-      acurKpi("Última checagem das 07h", exec ? acurHora(exec.concluido_em) : "—", exec ? ("Slack: " + (/SLACK_BOT_TOKEN/.test(exec.slack_status || "") ? "ainda não configurado" : escHtml(exec.slack_status || "—"))) : "") +
+      acurKpi("Última atualização", exec ? acurHora(exec.ultima_atualizacao_em || exec.concluido_em) : "—",
+        exec ? "todos os itens, de hora em hora (08h–19h) · checagem completa das 07h: " + acurHora(exec.concluido_em).slice(11) : "") +
     '</div></section>';
     return kpis + tabela.html + acurRelatorioHtml();
   }
