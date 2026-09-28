@@ -2864,6 +2864,8 @@ try {
       embaladosPorHoraFormaEDN: row.embalados_por_hora_forma_edn || {},
       primeiroEmbaladoEmPR: row.primeiro_embalado_em_pr || null,
       primeiroEmbaladoEmEDN: row.primeiro_embalado_em_edn || null,
+      ritmo60minPR: row.ritmo_60min_pr || null,
+      ritmo60minEDN: row.ritmo_60min_edn || null,
       atualizadoEm: row.atualizado_em,
     };
   }
@@ -2884,6 +2886,9 @@ try {
   // Ordens separadas hoje no WMS (tabela wms_separacao_snapshot, gravada pelo GLog
   // a cada ~10 min — glog/src/lib/wms-separacao.ts). null = ainda não carregou.
   var wmsSepUltimo = null;
+  // Pedidos que faltavam quando a coleta chegou — gravado uma vez pelo GLog
+  // (glog/src/lib/tiny-coletas.ts) e travado até a meia-noite. Chave "PR|mercado_livre".
+  var tinyColetasRegistro = {};
 
   function tinyHorariosVazios(){
     return {
@@ -3042,7 +3047,7 @@ try {
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = (embaladoPorForma||{})[chaveTiny] || 0;
     var pendente = (pendentePorForma||{})[chaveTiny] || 0;
-    var atual = tinyRitmoAtualPorHora((embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
+    var atual = tinyRitmoForma(empresaKey, chaveTiny, (embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
     var alvoColeta = tinyHorarioDeHoje(empresaKey, formaKey, "horario_coleta");
     if (!alvoColeta) return null;
     var prev = tinyPrevisaoFim(pendente, atual, alvoColeta, "coleta");
@@ -3073,11 +3078,25 @@ try {
       item("var(--ink-3)", "sem horário de coleta") + '</div>';
   }
 
+  // Ritmo atual = pedidos embalados nos ÚLTIMOS 60 MINUTOS corridos, sem o almoço
+  // (calculado no GLog — glog/src/lib/ritmo-60min.ts; pedido do dono 28/09). Sem
+  // esse dado ainda (começo do registro), cai na média das últimas horas cheias.
+  function tinyRitmo60(empresaKey){
+    var s = tinyUltimoSnapshot;
+    if (!s) return null;
+    return (empresaKey === "PR" ? s.ritmo60minPR : s.ritmo60minEDN) || null;
+  }
+  function tinyRitmoForma(empresaKey, chaveTiny, porHoraForma, embalado, primeiroEmbaladoEmIso){
+    var r = tinyRitmo60(empresaKey);
+    if (r) return (r.porForma || {})[chaveTiny] || 0;
+    return tinyRitmoAtualPorHora(porHoraForma, embalado, primeiroEmbaladoEmIso);
+  }
+
   function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
     var pendente = pendentePorForma[chaveTiny] || 0;
-    var atual = tinyRitmoAtualPorHora((embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
+    var atual = tinyRitmoForma(empresaKey, chaveTiny, (embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
     var alvoColeta = tinyHorarioDeHoje(empresaKey, formaKey, "horario_coleta");
     var necessarioNum = null, necessarioTxt;
     if (!tinyHorarios) necessarioTxt = "Carregando…";
@@ -3117,7 +3136,8 @@ try {
 
   function tinyRitmoCard(empresaKey, nomeEmpresa, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     return '<div class="card" style="padding:12px 14px;">' +
-      '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Ritmo atual — ' + nomeEmpresa + '</div></div>' +
+      '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Ritmo atual — ' + nomeEmpresa + '</div>' +
+        '<div class="desc" style="font-size:.7rem;">' + (tinyRitmo60(empresaKey) ? "pedidos embalados nos últimos 60 min (sem almoço)" : "média das últimas horas — o ritmo de 60 min aparece em alguns minutos") + '</div></div>' +
       '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">' +
         TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaRitmo(empresaKey, f, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma); }).join("") +
       '</div>' +
@@ -3142,7 +3162,7 @@ try {
   function tinyLinhaProjecao(empresaKey, formaKey, embaladoPorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
     var embalado = embaladoPorForma[chaveTiny] || 0;
-    var atual = tinyRitmoAtualPorHora((embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
+    var atual = tinyRitmoForma(empresaKey, chaveTiny, (embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
 
     var txtCorte = tinyProjecaoTexto(empresaKey, formaKey, atual, "horario_corte", "Corte de hoje já passou");
     var txtFimDia = tinyProjecaoTexto(empresaKey, formaKey, atual, "horario_fim_dia", "Horário de hoje já passou");
@@ -3264,7 +3284,10 @@ try {
       Object.keys(m).forEach(function(h){ porHora[h] = (porHora[h] || 0) + (m[h] || 0); });
     });
     var primeiros = [d.primeiroEmbaladoEmPR, d.primeiroEmbaladoEmEDN].filter(Boolean).sort();
-    var ritmo = tinyRitmoAtualPorHora(porHora, d.embaladoTotal || 0, primeiros[0] || null);
+    var r60pr = tinyRitmo60("PR"), r60edn = tinyRitmo60("EDN");
+    var ritmo = (r60pr || r60edn)
+      ? ((r60pr ? r60pr.total : 0) + (r60edn ? r60edn.total : 0))
+      : tinyRitmoAtualPorHora(porHora, d.embaladoTotal || 0, primeiros[0] || null);
     var prazo = null, rotulo = "fim do expediente";
     if (tinyHorarios){
       Object.keys(TINY_EMPRESA_FORMAS).forEach(function(emp){
@@ -3294,7 +3317,7 @@ try {
           '<div style="font-size:.75rem; font-weight:700; color:' + cor + ';">' + escHtml(prev.detalhe) + '</div></div>' +
         '<div>' +
           linha("Fila total", fmtInt(d.pendenteTotal || 0) + " pedidos") +
-          linha("Ritmo da equipe", fmtDec(ritmo, 1) + " /h") +
+          linha("Ritmo da equipe", fmtDec(ritmo, 1) + " /h" + ((r60pr || r60edn) ? " (últimos 60 min)" : "")) +
           linha(rotulo.charAt(0).toUpperCase() + rotulo.slice(1), prazo ? tinyHoraTxt(prazo) : "—") +
         '</div>' +
       '</div>' +
@@ -3346,17 +3369,26 @@ try {
         return;
       }
 
-      // Coleta de hoje já bateu — trava em zero e avisa se sobrou pedido.
+      // Coleta de hoje já bateu — trava em zero e mostra quantos faltavam NA HORA
+      // da coleta (número gravado pelo GLog, não muda mais até a meia-noite).
       elValor.textContent = "00:00:00";
-      var chaveTiny = TINY_FORMA_NOME_TINY[a.forma];
-      var pendentePorForma = (tinyUltimoSnapshot && (a.empresa === "PR" ? tinyUltimoSnapshot.pendentePorFormaEnvioPR : tinyUltimoSnapshot.pendentePorFormaEnvioEDN)) || {};
-      var pendente = pendentePorForma[chaveTiny] || 0;
+      var reg = tinyColetasRegistro[a.empresa + "|" + a.forma];
+      var pendente, sufixo = "";
+      if (reg){
+        pendente = Number(reg.pendentes) || 0;
+        if (Number(reg.atrasado_min) > 2) sufixo = " (registrado às " + tinyHoraTxt(new Date(reg.registrado_em)) + ")";
+      } else {
+        var chaveTiny = TINY_FORMA_NOME_TINY[a.forma];
+        var pendentePorForma = (tinyUltimoSnapshot && (a.empresa === "PR" ? tinyUltimoSnapshot.pendentePorFormaEnvioPR : tinyUltimoSnapshot.pendentePorFormaEnvioEDN)) || {};
+        pendente = pendentePorForma[chaveTiny] || 0;
+        sufixo = " (registrando…)";
+      }
       if (pendente <= 0){
         elValor.style.color = "var(--status-good)";
-        if (elStatus) { elStatus.style.color = "var(--status-good)"; elStatus.textContent = "🎉 Parabéns, todos os pedidos prontos!"; }
+        if (elStatus) { elStatus.style.color = "var(--status-good)"; elStatus.textContent = "🎉 Parabéns, todos os pedidos prontos antes da coleta!" + sufixo; }
       } else {
         elValor.style.color = "var(--status-critical)";
-        if (elStatus) { elStatus.style.color = "var(--status-critical)"; elStatus.textContent = "⚠ Cuidado, ainda " + (pendente === 1 ? "falta 1 pedido" : "faltam " + fmtInt(pendente) + " pedidos") + " para embalar."; }
+        if (elStatus) { elStatus.style.color = "var(--status-critical)"; elStatus.textContent = "⚠ Na coleta " + (pendente === 1 ? "faltava 1 pedido" : "faltavam " + fmtInt(pendente) + " pedidos") + " para embalar." + sufixo; }
       }
     });
   }
@@ -3791,8 +3823,15 @@ try {
     if (!el) return; // não estamos na Visão Geral agora
     if (!sb) { el.innerHTML = renderTinyOutboundError("Não foi possível conectar ao banco de dados (Supabase)."); return; }
     tinyOutboundFetching = true;
-    sb.from("wms_separacao_snapshot").select("*").eq("id", "atual").maybeSingle()
-      .then(function(r){ if (!r.error) wmsSepUltimo = r.data || null; }, function(){})
+    sb.from("tiny_coleta_registro").select("*").eq("data", isoDate(new Date()))
+      .then(function(r){
+        if (r.error) return;
+        var m = {};
+        (r.data || []).forEach(function(x){ m[x.empresa + "|" + x.forma] = x; });
+        tinyColetasRegistro = m;
+      }, function(){})
+      .then(function(){ return sb.from("wms_separacao_snapshot").select("*").eq("id", "atual").maybeSingle(); })
+      .then(function(r){ if (r && !r.error) wmsSepUltimo = r.data || null; }, function(){})
       .then(function(){ return sb.from("tiny_outbound_snapshot").select("*").eq("id", "atual").maybeSingle(); })
       .then(function(res){
         if (res.error) throw new Error(res.error.message);
