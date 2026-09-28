@@ -2943,7 +2943,7 @@ try {
     } else {
       inicio = new Date(agora); inicio.setHours(0,0,0,0);
     }
-    var horas = Math.max((agora.getTime()-inicio.getTime())/3600000, 1/60);
+    var horas = Math.max((agora.getTime()-inicio.getTime()-tinyAlmocoEntre(inicio, agora))/3600000, 1/60);
     return embaladoHoje/horas;
   }
 
@@ -2958,13 +2958,45 @@ try {
   // um "pedidos/h" fora da realidade. Sem nenhuma hora cheia ainda hoje
   // (bem no início do dia), cai pro método antigo como fallback seguro.
   var TINY_RITMO_JANELA_HORAS = 3;
+  // Horário de almoço (pedido do dono, 2026-09-28): a hora das 12h não entra na
+  // média do ritmo (senão derruba tudo depois do almoço) e as previsões de
+  // término / ritmo necessário descontam essa pausa.
+  var TINY_ALMOCO_INICIO = 12, TINY_ALMOCO_FIM = 13;
+  function tinyEhHoraAlmoco(h){ return h >= TINY_ALMOCO_INICIO && h < TINY_ALMOCO_FIM; }
+  function tinyAlmocoDe(dia){
+    var i = new Date(dia); i.setHours(TINY_ALMOCO_INICIO, 0, 0, 0);
+    var f = new Date(dia); f.setHours(TINY_ALMOCO_FIM, 0, 0, 0);
+    return { ini:i, fim:f };
+  }
+  // Milissegundos de almoço entre a e b (mesmo dia).
+  function tinyAlmocoEntre(a, b){
+    var al = tinyAlmocoDe(a);
+    var ini = Math.max(a.getTime(), al.ini.getTime()), fim = Math.min(b.getTime(), al.fim.getTime());
+    return Math.max(0, fim - ini);
+  }
+  // Horário em que termina `horas` de trabalho a partir de agora, pulando o almoço.
+  function tinyFimComAlmoco(horas){
+    var agora = new Date();
+    var al = tinyAlmocoDe(agora);
+    var t = agora.getTime();
+    if (t >= al.ini.getTime() && t < al.fim.getTime()) t = al.fim.getTime(); // no almoço: conta a partir das 13h
+    var fim = t + horas*3600000;
+    if (t < al.ini.getTime() && fim > al.ini.getTime()) fim += al.fim.getTime() - al.ini.getTime();
+    return new Date(fim);
+  }
   function tinyRitmoAtualPorHora(porHoraForma, embaladoHoje, primeiroEmbaladoEmIso){
     var horaAtual = new Date().getHours();
     var horasComDado = [];
     for (var h = 0; h < horaAtual; h++){
+      if (tinyEhHoraAlmoco(h)) continue;
       if (porHoraForma && porHoraForma[String(h)] !== undefined) horasComDado.push(h);
     }
     if (horasComDado.length === 0) return tinyRitmoAtual(embaladoHoje, primeiroEmbaladoEmIso);
+    // Se menos da metade dos embalados de hoje tem hora conhecida (ex.: um lote
+    // grande caiu como "linha de base" — EDN em 28/09), a média por hora mente;
+    // usa o ritmo desde o primeiro embalado (já descontando o almoço).
+    var comHora = Object.keys(porHoraForma || {}).reduce(function(acc,h2){ return acc + (porHoraForma[h2]||0); }, 0);
+    if (embaladoHoje > 0 && comHora < embaladoHoje * 0.5) return tinyRitmoAtual(embaladoHoje, primeiroEmbaladoEmIso);
     var ultimas = horasComDado.slice(-TINY_RITMO_JANELA_HORAS);
     var soma = ultimas.reduce(function(acc,h2){ return acc + (porHoraForma[String(h2)]||0); }, 0);
     return soma/ultimas.length;
@@ -2988,11 +3020,12 @@ try {
   function tinyPrevisaoFim(pendente, ritmo, prazo, rotuloPrazo){
     if (pendente <= 0) return { status:"verde", fimTxt:"concluído", detalhe:"fila zerada" };
     if (!ritmo || ritmo <= 0) return { status:"vermelho", fimTxt:"sem ritmo", detalhe:fmtInt(pendente) + " na fila e ninguém embalando agora" };
-    var fim = new Date(Date.now() + pendente/ritmo*3600000);
+    var fim = tinyFimComAlmoco(pendente/ritmo);
     // Ritmo muito baixo (ex.: hora do almoço) jogaria o fim para outro dia com
     // "74h atrasado" — nesse caso só diz que não termina hoje e quanto precisa.
     if (fim.toDateString() !== new Date().toDateString()){
-      var precisa = prazo && prazo.getTime() > Date.now() ? " — precisa de " + fmtDec(pendente/((prazo.getTime()-Date.now())/3600000),1) + "/h até " + tinyHoraTxt(prazo) : "";
+      var horasUteis = prazo ? (prazo.getTime()-Date.now()-tinyAlmocoEntre(new Date(), prazo))/3600000 : 0;
+      var precisa = prazo && horasUteis > 0 ? " — precisa de " + fmtDec(pendente/horasUteis,1) + "/h até " + tinyHoraTxt(prazo) : "";
       return { status:"vermelho", fimTxt:"não termina hoje", detalhe:"no ritmo atual (" + fmtDec(ritmo,1) + "/h)" + precisa };
     }
     var fimTxt = tinyHoraTxt(fim);
@@ -3015,7 +3048,7 @@ try {
     var prev = tinyPrevisaoFim(pendente, atual, alvoColeta, "coleta");
     if (pendente <= 0) return { status:"verde", atual:atual, necessario:0, texto:"fila zerada", previsao:prev };
     if (alvoColeta.getTime() <= Date.now()) return { status:"vermelho", atual:atual, necessario:null, texto:"coleta já passou com " + fmtInt(pendente) + " na fila", previsao:prev };
-    var horasRestantes = Math.max(1, Math.ceil((alvoColeta.getTime()-Date.now())/3600000));
+    var horasRestantes = Math.max(1, Math.ceil((alvoColeta.getTime()-Date.now()-tinyAlmocoEntre(new Date(), alvoColeta))/3600000));
     var necessario = pendente/horasRestantes;
     return { status:prev.status, atual:atual, necessario:necessario, texto:fmtDec(atual,1) + "/h · precisa " + fmtDec(necessario,1) + "/h · " + (/^(não|sem)/.test(prev.fimTxt) ? prev.fimTxt : "termina " + prev.fimTxt), previsao:prev };
   }
@@ -3057,7 +3090,7 @@ try {
       // 300/h). Arredondado, a última hora inteira antes da coleta sempre
       // conta como "1h", então o necessário nunca passa do total pendente
       // e só muda de hora em hora, não a cada atualização.
-      var horasRestantes = Math.max(1, Math.ceil((alvoColeta.getTime()-Date.now())/3600000));
+      var horasRestantes = Math.max(1, Math.ceil((alvoColeta.getTime()-Date.now()-tinyAlmocoEntre(new Date(), alvoColeta))/3600000));
       necessarioNum = pendente/horasRestantes;
       necessarioTxt = fmtDec(necessarioNum,1) + " /h";
     }
@@ -3102,7 +3135,7 @@ try {
     if (!tinyHorarios) return "Carregando…";
     if (!alvo) return "Sem horário configurado hoje";
     if (alvo.getTime() <= Date.now()) return rotuloPassado;
-    var horasRestantes = (alvo.getTime()-Date.now())/3600000;
+    var horasRestantes = (alvo.getTime()-Date.now()-tinyAlmocoEntre(new Date(), alvo))/3600000;
     return "+" + fmtInt(Math.round(atual*horasRestantes)) + " pedidos";
   }
 
