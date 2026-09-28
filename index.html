@@ -2940,13 +2940,15 @@ try {
   // hoje (não desde meia-noite — pedido do dono: refletir desde quando o
   // time realmente começou a embalar). Sem primeiro embalado ainda
   // conhecido (ou zero embalado), cai pra meia-noite como fallback neutro.
-  function tinyRitmoAtual(embaladoHoje, primeiroEmbaladoEmIso){
+  function tinyRitmoAtual(embaladoHoje, primeiroEmbaladoEmIso, porHoraFallback){
     var agora = new Date();
     var inicio;
     if (primeiroEmbaladoEmIso){
       inicio = new Date(primeiroEmbaladoEmIso);
     } else {
-      inicio = new Date(agora); inicio.setHours(0,0,0,0);
+      // Sem o horário do 1º embalado: começo da 1ª hora que teve pedido (não meia-noite).
+      var horasComPedido = Object.keys(porHoraFallback || {}).filter(function(h){ return (porHoraFallback[h]||0) > 0; }).map(Number).sort(function(a,b){ return a-b; });
+      inicio = new Date(agora); inicio.setHours(horasComPedido.length ? horasComPedido[0] : 0, 0, 0, 0);
     }
     var horas = Math.max((agora.getTime()-inicio.getTime()-tinyAlmocoEntre(inicio, agora))/3600000, 1/60);
     return embaladoHoje/horas;
@@ -3086,10 +3088,12 @@ try {
     if (!s) return null;
     return (empresaKey === "PR" ? s.ritmo60minPR : s.ritmo60minEDN) || null;
   }
+  // Ritmo usado no painel (pedido do dono, 28/09 à tarde): MÉDIA DO DIA =
+  // pedidos embalados hoje ÷ horas trabalhadas desde o 1º embalado, sem o almoço
+  // (12h–13h). Ex.: 30, 50 e 30 nas três primeiras horas → 110 ÷ 3 = 36,7/h. Os
+  // gráficos de pedidos por hora continuam com o número exato de cada hora.
   function tinyRitmoForma(empresaKey, chaveTiny, porHoraForma, embalado, primeiroEmbaladoEmIso){
-    var r = tinyRitmo60(empresaKey);
-    if (r) return (r.porForma || {})[chaveTiny] || 0;
-    return tinyRitmoAtualPorHora(porHoraForma, embalado, primeiroEmbaladoEmIso);
+    return tinyRitmoAtual(embalado, primeiroEmbaladoEmIso, porHoraForma);
   }
 
   function tinyLinhaRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
@@ -3137,7 +3141,7 @@ try {
   function tinyRitmoCard(empresaKey, nomeEmpresa, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     return '<div class="card" style="padding:12px 14px;">' +
       '<div class="card-head"><div class="card-title" style="font-size:.85rem;">Ritmo atual — ' + nomeEmpresa + '</div>' +
-        '<div class="desc" style="font-size:.7rem;">' + (tinyRitmo60(empresaKey) ? "pedidos embalados nos últimos 60 min (sem almoço)" : "média das últimas horas — o ritmo de 60 min aparece em alguns minutos") + '</div></div>' +
+        '<div class="desc" style="font-size:.7rem;">média do dia: embalados ÷ horas trabalhadas (sem almoço)</div></div>' +
       '<div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">' +
         TINY_EMPRESA_FORMAS[empresaKey].map(function(f){ return tinyLinhaRitmo(empresaKey, f, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma); }).join("") +
       '</div>' +
@@ -3284,10 +3288,7 @@ try {
       Object.keys(m).forEach(function(h){ porHora[h] = (porHora[h] || 0) + (m[h] || 0); });
     });
     var primeiros = [d.primeiroEmbaladoEmPR, d.primeiroEmbaladoEmEDN].filter(Boolean).sort();
-    var r60pr = tinyRitmo60("PR"), r60edn = tinyRitmo60("EDN");
-    var ritmo = (r60pr || r60edn)
-      ? ((r60pr ? r60pr.total : 0) + (r60edn ? r60edn.total : 0))
-      : tinyRitmoAtualPorHora(porHora, d.embaladoTotal || 0, primeiros[0] || null);
+    var ritmo = tinyRitmoAtual(d.embaladoTotal || 0, primeiros[0] || null, porHora);
     var prazo = null, rotulo = "fim do expediente";
     if (tinyHorarios){
       Object.keys(TINY_EMPRESA_FORMAS).forEach(function(emp){
@@ -3317,7 +3318,7 @@ try {
           '<div style="font-size:.75rem; font-weight:700; color:' + cor + ';">' + escHtml(prev.detalhe) + '</div></div>' +
         '<div>' +
           linha("Fila total", fmtInt(d.pendenteTotal || 0) + " pedidos") +
-          linha("Ritmo da equipe", fmtDec(ritmo, 1) + " /h" + ((r60pr || r60edn) ? " (últimos 60 min)" : "")) +
+          linha("Ritmo da equipe", fmtDec(ritmo, 1) + " /h (média do dia)") +
           linha(rotulo.charAt(0).toUpperCase() + rotulo.slice(1), prazo ? tinyHoraTxt(prazo) : "—") +
         '</div>' +
       '</div>' +
