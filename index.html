@@ -3671,13 +3671,16 @@ try {
       '<div class="kpi-value"' + (cor ? ' style="color:' + cor + ';"' : '') + '>' + valor + '</div>' +
       '<div class="kpi-bottom" style="color:var(--ink-3); font-size:.78rem;">' + nota + '</div></div>';
   }
+  function acurEmConferencia(status){ return status === "AGUARDANDO SEPARAÇÃO" || status === "POSSÍVEL DIVERGÊNCIA"; }
   function acurPill(status){
     if (status === "OK" || status === "RESOLVIDA") return '<span class="pill done">' + (status === "OK" ? "OK" : "Resolvida") + '</span>';
+    if (status === "AGUARDANDO SEPARAÇÃO") return '<span class="pill pending">Aguardando separação</span>';
+    if (status === "POSSÍVEL DIVERGÊNCIA") return '<span class="pill pending" style="color:var(--status-critical);">Possível divergência · aguardando separação</span>';
     if (status === "ABERTA") return '<span class="pill critical">Aberta</span>';
     return '<span class="pill critical">' + escHtml(status) + '</span>';
   }
   function acuracidadeHtmlPage(){
-    return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full). Checado todo dia às 07h e, os divergentes, de hora em hora até as 19h. Alerta no Slack quando sair de 100%.</p></div></div>' +
+    return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full). Checado todo dia às 07h e, os divergentes, de hora em hora até as 19h. Se ainda tem pedido para separar no WMS com o item, ele fica "em conferência" até a separação. Alerta no Slack quando sair de 100%.</p></div></div>' +
       '<div class="content"><div id="acuracidade-widget"><div class="card" style="color:var(--ink-3);">Carregando…</div></div></div>';
   }
 
@@ -3718,7 +3721,8 @@ try {
     var c = acur.cache;
     var porSkuItem = {}; c.itens.forEach(function(i){ porSkuItem[i.sku] = i; });
     var hoje = c.ultima.filter(function(r){ return porSkuItem[r.sku] && porSkuItem[r.sku].ativo; });
-    hoje.sort(function(a,b){ return ((a.status === "OK") - (b.status === "OK")) || a.sku.localeCompare(b.sku); });
+    var peso = function(st){ return st === "OK" ? 2 : acurEmConferencia(st) ? 1 : 0; };
+    hoje.sort(function(a,b){ return (peso(a.status) - peso(b.status)) || a.sku.localeCompare(b.sku); });
     var totalPaginas = Math.max(1, Math.ceil(hoje.length / ACUR_POR_PAGINA));
     if (acur.pagina > totalPaginas) acur.pagina = totalPaginas;
     if (acur.pagina < 1) acur.pagina = 1;
@@ -3742,7 +3746,9 @@ try {
         '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + acurDif(dif) + '</td>' +
         '<td style="color:' + acurCor(it.acuracidade_antes) + ';">' + acurPct(it.acuracidade_antes) + '</td>' +
         '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
-        '<td>' + acurPill(r.status) + '<div style="color:var(--ink-3); font-size:.7rem;">' + acurHora(r.verificado_em).slice(11) + '</div></td>' +
+        '<td>' + acurPill(r.status) + '<div style="color:var(--ink-3); font-size:.7rem;">' + acurHora(r.verificado_em).slice(11) + '</div>' +
+          (r.pendencias && r.pendencias.length ? '<div style="font-size:.72rem; color:var(--ink-2); white-space:normal; min-width:180px;">Falta separar: ' + r.pendencias.map(function(p){ return 'ordem ' + p.ordem + (p.emissao ? ' (emissão ' + p.emissao + ')' : '') + ' · ' + fmtInt(Number(p.qtd)) + ' un'; }).join('; ') + ' → WMS vai a ' + fmtInt(Number(r.wms_apos_separar)) + '</div>' : '') +
+        '</td>' +
         '<td><button class="btn-small" data-acur-act="toggle-obs" data-sku="' + escHtml(r.sku) + '">' + (aberto ? "▾ " : "📝 ") + "Observação" + (n ? ' <span style="color:var(--ink-3);">(' + n + ' no histórico)</span>' : '') + '</button></td>' +
       '</tr>' +
       (aberto ? '<tr><td colspan="' + NCOL + '" style="background:var(--surface-2); white-space:normal;">' +
@@ -3766,6 +3772,7 @@ try {
     return {
       qtd:hoje.length,
       ok:hoje.filter(function(r){ return r.status === "OK"; }).length,
+      conferencia:hoje.filter(function(r){ return acurEmConferencia(r.status); }).length,
       html:'<section class="sector"><div class="card">' +
         '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + (hoje.length ? " · " + hoje.length + " SKUs" : "") + '</div></div>' +
         (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th><th>Observações</th></tr></thead><tbody>' + linhas + '</tbody></table></div>' + paginador
@@ -3975,13 +3982,14 @@ try {
     var c = acur.cache;
     var ativos = c.itens.filter(function(i){ return i.ativo; });
     var tabela = acurTabelaUltima();
-    var div = tabela.qtd - tabela.ok;
+    var div = tabela.qtd - tabela.ok - tabela.conferencia;
     var exec = c.execs[0] || null;
     var abertas = c.ocorr.filter(function(o){ return o.status === "ABERTA"; }).length;
     var kpis = '<section class="sector"><div class="kpi-grid">' +
       acurKpi("Itens monitorados", fmtInt(ativos.length), "coluna INVENTARIADO da planilha") +
       acurKpi("100% agora", fmtInt(tabela.ok), c.ultimaData ? "checagem de " + acurDataBr(c.ultimaData) : "ainda sem checagem", "var(--status-good)") +
       acurKpi("Divergentes", fmtInt(div), div ? abertas + " ocorrência(s) aberta(s) — rechecadas de hora em hora" : "tudo batendo", div ? "var(--status-critical)" : "var(--status-good)") +
+      acurKpi("Em conferência", fmtInt(tabela.conferencia), tabela.conferencia ? "aguardando separação no WMS — ainda não entra como divergência" : "nenhum pedido por separar", tabela.conferencia ? "var(--status-warning)" : "var(--ink-3)") +
       acurKpi("Última checagem das 07h", exec ? acurHora(exec.concluido_em) : "—", exec ? ("Slack: " + (/SLACK_BOT_TOKEN/.test(exec.slack_status || "") ? "ainda não configurado" : escHtml(exec.slack_status || "—"))) : "") +
     '</div></section>';
     return kpis + tabela.html + acurRelatorioHtml();
@@ -4134,7 +4142,7 @@ try {
       var ultimaData = r0.data && r0.data[0] ? r0.data[0].data : null;
       return Promise.all([
         sb.from("acuracidade_itens").select("*"),
-        ultimaData ? sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_comparado,acuracidade,status,verificado_em").eq("data", ultimaData) : Promise.resolve({data:[]}),
+        ultimaData ? sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_comparado,acuracidade,status,verificado_em,pendencias,wms_apos_separar").eq("data", ultimaData) : Promise.resolve({data:[]}),
         sb.from("acuracidade_execucao").select("*").order("data", {ascending:false}).limit(1),
         sb.from("acuracidade_observacoes").select("*").order("criado_em", {ascending:false}),
         sb.from("acuracidade_ocorrencias").select("*").order("detectada_em", {ascending:false})
