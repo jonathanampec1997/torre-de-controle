@@ -616,7 +616,7 @@ try {
   // webServiceGetCadastro em 2026-09-09 (ver glog/src/lib/eship.ts). São 5
   // CNPJs reais, não 3 como a gente assumia antes (Ampec SP e Mapec SC não
   // estavam documentados). O `id` aqui bate com o `empresa` que a API do
-  // Glog (/api/wms/recebimento-diario) já devolve pronto.
+  // GLog (/api/wms/recebimento-diario) já devolve pronto.
   var EMPRESAS = [
     {id:"ampec-pr", nome:"AMPEC PR"},
     {id:"edn-ampec-sc", nome:"EDN - AMPEC SC"},
@@ -1081,7 +1081,7 @@ try {
   derivarOperadoresInboundReais(); // já popula a partir do que foi sincronizado numa sessão anterior
 
   // Busca o detalhe real (um por recebimento — conferente, status, NF-e) do
-  // mesmo proxy do Glog, a partir da URL da conexão agregada (troca
+  // mesmo proxy do GLog, a partir da URL da conexão agregada (troca
   // "recebimento-diario" por "recebimento-detalhado" na mesma base). Alimenta
   // Rastreabilidade (Inbound) e a lista de operadores reais (conferentes) —
   // não existe schema genérico de Fontes de Dados pra isso porque não é uma
@@ -1343,8 +1343,8 @@ try {
 
   var CONN_STORE_KEY = "torreControle.conexoes.v2"; // v2: empresas viraram os 5 IDs reais (ampec-pr/edn-ampec-sc/mapec-pr/ampec-sp/mapec-sc)
   // Pré-configurada: Recebimento já ligado ao WMS E-ship de verdade, via o
-  // proxy do Glog (rota /api/wms/recebimento-diario) — precisa do servidor
-  // do Glog rodando em localhost:3000 (`start-glog.bat` ou `npm run dev`
+  // proxy do GLog (rota /api/wms/recebimento-diario) — precisa do servidor
+  // do GLog rodando em localhost:3000 (`start-glog.bat` ou `npm run dev`
   // dentro de `glog/`). O proxy existe porque a API da E-ship não manda
   // cabeçalho CORS — chamar ela direto do navegador (sem passar por um
   // servidor nosso) é bloqueado pelo próprio navegador, não tem como
@@ -1352,7 +1352,7 @@ try {
   function defaultConnections(){
     return [
       {
-        id:1, nome:"Recebimento — WMS E-ship (ao vivo, via Glog)", tipo:"api", targetAba:"recebimento",
+        id:1, nome:"Recebimento — WMS E-ship (ao vivo, via GLog)", tipo:"api", targetAba:"recebimento",
         url:"http://localhost:3000/api/wms/recebimento-diario",
         sheetGid:"", apiHeaders:"", apiAuthToken:"", jsonPath:"",
         mapping:{data:"data", empresa:"empresa", nfs:"nfs", volumes:"volumes", unidades:"unidades", tempoConf:"tempoConf"},
@@ -2337,7 +2337,7 @@ try {
     '</div>' +
     '<div class="conn-warning">' +
       '<span class="ic">🔌</span>' +
-      '<div><strong>Conexão "Recebimento — WMS E-ship" precisa do Glog rodando:</strong> a API do WMS não permite chamada direta do navegador (sem cabeçalho CORS), então essa conexão passa pelo servidor do Glog (<code>http://localhost:3000/api/wms/recebimento-diario</code>). Suba o Glog primeiro (<code>start-glog.bat</code>, ou <code>npm run dev</code> dentro de <code>glog/</code>) e só depois clique em Sincronizar aqui.</div>' +
+      '<div><strong>Conexão "Recebimento — WMS E-ship" precisa do GLog rodando:</strong> a API do WMS não permite chamada direta do navegador (sem cabeçalho CORS), então essa conexão passa pelo servidor do GLog (<code>http://localhost:3000/api/wms/recebimento-diario</code>). Suba o GLog primeiro (<code>start-glog.bat</code>, ou <code>npm run dev</code> dentro de <code>glog/</code>) e só depois clique em Sincronizar aqui.</div>' +
     '</div>';
 
     var rows = CONNECTIONS.map(function(conn, idx){
@@ -2818,7 +2818,7 @@ try {
 
   /* ==================== TINY OUTBOUND WIDGET (ao vivo, Visão Geral) ==================== */
   // Widget separado do resto da Visão Geral, de propósito: busca direto do
-  // backend do Glog (`http://localhost:3000/api/tiny/outbound-hoje`, ver
+  // backend do GLog (`http://localhost:3000/api/tiny/outbound-hoje`, ver
   // `glog/src/lib/tiny.ts` + `tiny-outbound-snapshot.ts`) e se atualiza
   // sozinho a cada 5min — SEM passar pelo render()/state global. Motivo:
   // render() reconstrói o DOM inteiro (ver convenções no HANDOFF), o que
@@ -2827,7 +2827,7 @@ try {
   // 5min disparasse. Igual à exceção já existente da busca de SKU
   // (`data-sku-filter`): manipula o DOM direto, nunca chama render().
   //
-  // Depende do servidor do Glog rodando local (`npm run dev` dentro de
+  // Depende do servidor do GLog rodando local (`npm run dev` dentro de
   // `glog/`, ou `start-glog.bat`) — mesma limitação já conhecida da
   // conexão "Recebimento — WMS E-ship". Sem ele, mostra um aviso em vez
   // de travar o resto da página.
@@ -2835,9 +2835,9 @@ try {
 
   // Converte a linha do Supabase (snake_case) pro formato que
   // renderTinyOutboundWidget espera (mesmo shape que a rota /api/tiny/
-  // outbound-hoje sempre devolveu). Ler daqui (em vez de chamar o Glog
+  // outbound-hoje sempre devolveu). Ler daqui (em vez de chamar o GLog
   // direto em localhost) é o que permite qualquer pessoa com o link ver
-  // os mesmos dados — só o Glog, rodando no PC de quem cadastrou o token,
+  // os mesmos dados — só o GLog, rodando no PC de quem cadastrou o token,
   // precisa alcançar o Tiny; todo mundo lê o resultado já pronto aqui.
   function tinyOutboundRowParaWidget(row){
     return {
@@ -3243,7 +3243,7 @@ try {
   function tinyOutboundWidgetShell(){
     return '<section class="sector">' +
       '<div class="sector-head"><h2>Outbound — Tiny ERP (hoje, ao vivo)</h2>' +
-        '<div class="desc">Fila atual pra embalar e embalados de hoje, direto do Tiny — atualiza sozinho a cada poucos minutos. Depende do Glog rodando local.</div>' +
+        '<div class="desc">Fila atual pra embalar e embalados de hoje, direto do Tiny — atualiza sozinho a cada poucos minutos. Depende do GLog rodando local.</div>' +
       '</div>' +
       '<div id="tiny-outbound-widget"><div class="banner-demo">Carregando dados do Tiny…</div></div>' +
     '</section>';
@@ -3252,7 +3252,7 @@ try {
   function renderTinyOutboundError(msg){
     return '<div class="banner-demo" style="border-color:var(--status-critical); color:var(--status-critical);">' +
       '⚠ Não consegui buscar dados do Tiny agora: ' + escHtml(msg) + '. ' +
-      'Confira se o servidor do Glog está rodando (<code>start-glog.bat</code>, ou <code>npm run dev</code> dentro de <code>glog/</code>).' +
+      'Confira se o servidor do GLog está rodando (<code>start-glog.bat</code>, ou <code>npm run dev</code> dentro de <code>glog/</code>).' +
     '</div>';
   }
 
@@ -3345,7 +3345,7 @@ try {
 
   /* ==================== HISTÓRICO DIÁRIO OUTBOUND (tiny_outbound_historico) ====================
      Diferente do widget acima (ao vivo, zera à meia-noite), isso lê o
-     arquivo permanente que o Glog grava sozinho às 19h todo dia (ver
+     arquivo permanente que o GLog grava sozinho às 19h todo dia (ver
      tiny-outbound-snapshot.ts → salvarHistoricoNoSupabase, pedido do dono
      em 2026-09-23). Mostra dia a dia, com filtro de data/empresa/forma de
      envio/embalador — usado em Outbound → Separação/Embalagem (por hora e
@@ -3584,7 +3584,7 @@ try {
     sb.from("tiny_outbound_snapshot").select("*").eq("id", "atual").maybeSingle()
       .then(function(res){
         if (res.error) throw new Error(res.error.message);
-        if (!res.data) throw new Error("Ainda sem nenhum dado salvo — aguarde o Glog rodar a primeira consulta.");
+        if (!res.data) throw new Error("Ainda sem nenhum dado salvo — aguarde o GLog rodar a primeira consulta.");
         tinyUltimoSnapshot = tinyOutboundRowParaWidget(res.data);
         var target = document.getElementById("tiny-outbound-widget");
         if (target) {
@@ -3606,28 +3606,33 @@ try {
   }
 
   /* ============================ ACURACIDADE (itens inventariados) ============================ */
-  // Checagem diária feita pelo Glog às 07h (glog/src/lib/acuracidade.ts):
+  // Checagem diária feita pelo GLog às 07h (glog/src/lib/acuracidade.ts) +
+  // rechecagem de hora em hora (08h–19h) só dos divergentes:
   // lista = coluna INVENTARIADO da aba Resumo da planilha de inventário;
   // Tiny = Geral Ampec PR + Ampec SC; WMS = PS + RC + Full AR000000010556.
-  // Acuracidade = 1 − |WMS − Tiny| ÷ Tiny. Aqui só lê o Supabase — exceto as
-  // observações/plano de ação por SKU (acuracidade_observacoes), que o time
-  // cria, edita e apaga por aqui. O histórico (acuracidade_diaria) nunca é
-  // apagado; fica minimizado e só carrega quando alguém abre.
+  // Acuracidade = 1 − |WMS − Tiny| ÷ Tiny.
+  // Histórico = relatório de OCORRÊNCIAS de divergência (acuracidade_ocorrencias:
+  // abre quando o SKU sai de 100%, fecha quando volta), com as observações do
+  // time ligadas a cada ocorrência, e o registro de checagens diárias — tudo
+  // exportável para planilha (CSV). Nada do histórico é apagado.
   var acurFetching = false;
+  var ACUR_POR_PAGINA = 20;
   var acur = {
-    cache:null,            // {itens, ultima, ultimaData, execs, obs}
-    hist:null,             // linhas completas do histórico (carregado ao abrir)
-    histAberto:false, histCarregando:false, histErro:null,
-    obsAberto:{},          // sku -> true
-    rascunho:{},           // sku -> texto novo sendo digitado
-    editando:null,         // id da observação em edição
-    editTexto:"",
-    apagando:null,         // id aguardando confirmação
+    cache:null,            // {itens, ultima, ultimaData, execs, obs, ocorr}
+    pagina:1,
+    obsAberto:{},          // sku -> composer aberto na tabela da última checagem
+    rascunho:{},           // chave ("sku:X" / "oc:ID") -> texto sendo digitado
+    salvoMsg:{},           // chave -> true (mostra "salvo no histórico")
     autor:"",
     salvando:false, erro:null,
-    pagina:1               // paginação da tabela da última checagem (20 SKUs por página)
+    editando:null, editTexto:"", apagando:null,
+    hist:{
+      aberto:false, aba:"ocorrencias",
+      de:"", ate:"", status:"todas", filtro:"",
+      ocAberta:{},         // id da ocorrência -> linha expandida
+      checagens:null, carregando:false, erro:null
+    }
   };
-  var ACUR_POR_PAGINA = 20;
   try { acur.autor = localStorage.getItem("acur-autor") || ""; } catch(e) {}
 
   function acurPct(v){
@@ -3649,94 +3654,106 @@ try {
     var d = new Date(ts);
     return acurDataBr(isoDate(d)) + " " + String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
   }
+  function acurDuracao(ms){
+    if (ms === null || ms === undefined || isNaN(ms)) return "—";
+    var min = Math.max(0, Math.round(ms / 60000));
+    if (min < 60) return min + " min";
+    var h = Math.round(min / 60);
+    if (h < 48) return h + " h";
+    return Math.floor(h / 24) + " d " + (h % 24) + " h";
+  }
+  function acurDif(v){
+    var n = Number(v) || 0;
+    return (n > 0 ? "+" : "") + fmtInt(n);
+  }
   function acurKpi(label, valor, nota, cor){
     return '<div class="kpi-card"><div class="kpi-top"><div class="kpi-label">' + label + '</div></div>' +
       '<div class="kpi-value"' + (cor ? ' style="color:' + cor + ';"' : '') + '>' + valor + '</div>' +
       '<div class="kpi-bottom" style="color:var(--ink-3); font-size:.78rem;">' + nota + '</div></div>';
   }
+  function acurPill(status){
+    if (status === "OK" || status === "RESOLVIDA") return '<span class="pill done">' + (status === "OK" ? "OK" : "Resolvida") + '</span>';
+    if (status === "ABERTA") return '<span class="pill critical">Aberta</span>';
+    return '<span class="pill critical">' + escHtml(status) + '</span>';
+  }
   function acuracidadeHtmlPage(){
-    return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full), checado todo dia às 07h. Alerta no Slack quando sair de 100%.</p></div></div>' +
+    return '<div class="topbar"><div><h1>Inbound · Acuracidade</h1><p>Itens inventariados: Tiny (Ampec PR + Ampec SC, depósito Geral) × WMS (PS + RC + Área Full). Checado todo dia às 07h e, os divergentes, de hora em hora até as 19h. Alerta no Slack quando sair de 100%.</p></div></div>' +
       '<div class="content"><div id="acuracidade-widget"><div class="card" style="color:var(--ink-3);">Carregando…</div></div></div>';
   }
 
-  function acurObsPainel(sku, obs){
-    var lista = obs.filter(function(o){ return o.sku === sku; });
-    var itens = lista.map(function(o){
-      var cab = '<div style="color:var(--ink-3); font-size:.74rem;">' + acurHora(o.criado_em) +
-        (o.autor ? ' · ' + escHtml(o.autor) : '') +
-        (o.atualizado_em && o.atualizado_em !== o.criado_em && new Date(o.atualizado_em) - new Date(o.criado_em) > 60000 ? ' · editado ' + acurHora(o.atualizado_em) : '') + '</div>';
-      if (acur.editando === o.id){
-        return '<div style="padding:8px 0; border-bottom:1px solid var(--border);">' + cab +
-          '<div class="form-field"><textarea data-acur-edit-texto="' + o.id + '" style="min-height:70px; width:100%;">' + escHtml(acur.editTexto) + '</textarea></div>' +
-          '<div class="btn-row" style="margin-top:6px;"><button class="btn-small" data-acur-act="salvar-edicao" data-id="' + o.id + '"' + (acur.salvando ? ' disabled' : '') + '>Salvar</button>' +
-          '<button class="btn-small" data-acur-act="cancelar-edicao">Cancelar</button></div></div>';
-      }
-      var botoes = acur.apagando === o.id
-        ? '<span style="font-size:.78rem; color:var(--status-critical); font-weight:700;">Apagar esta observação?</span> <button class="btn-danger" data-acur-act="confirmar-apagar" data-id="' + o.id + '">Sim, apagar</button> <button class="btn-small" data-acur-act="cancelar-apagar">Não</button>'
-        : '<button class="btn-small" data-acur-act="editar" data-id="' + o.id + '">Editar</button> <button class="btn-danger" data-acur-act="apagar" data-id="' + o.id + '">Apagar</button>';
-      return '<div style="padding:8px 0; border-bottom:1px solid var(--border);">' + cab +
-        '<div style="white-space:pre-wrap; margin:4px 0 6px; color:var(--ink);">' + escHtml(o.texto) + '</div>' +
-        '<div class="btn-row">' + botoes + '</div></div>';
-    }).join("");
-    return '<div style="padding:6px 4px 10px; white-space:normal;">' +
-      '<div style="font-weight:700; margin-bottom:4px;">Observações / plano de ação — ' + escHtml(sku) + '</div>' +
-      (itens || '<div style="color:var(--ink-3); font-size:.8rem; padding:4px 0;">Nenhuma observação ainda.</div>') +
-      '<div class="form-field" style="margin-top:10px;"><textarea data-acur-rascunho="' + escHtml(sku) + '" placeholder="O que foi encontrado, o que foi feito para resolver a divergência…" style="min-height:70px; width:100%;">' + escHtml(acur.rascunho[sku] || "") + '</textarea></div>' +
+  /* ---------- observações ---------- */
+  function acurObsDoSku(sku){ return acur.cache.obs.filter(function(o){ return o.sku === sku; }); }
+  function acurOcAberta(sku){ return acur.cache.ocorr.filter(function(o){ return o.sku === sku && o.status === "ABERTA"; })[0] || null; }
+
+  function acurComposer(chave, sku, ocId, dica){
+    return '<div class="form-field" style="margin-top:6px;"><textarea data-acur-rascunho="' + escHtml(chave) + '" placeholder="' + escHtml(dica) + '" style="min-height:64px; width:100%;">' + escHtml(acur.rascunho[chave] || "") + '</textarea></div>' +
       '<div class="btn-row" style="margin-top:6px;">' +
         '<input class="search-input" type="text" data-acur-autor placeholder="Seu nome (opcional)" value="' + escHtml(acur.autor) + '">' +
-        '<button class="btn-primary" data-acur-act="adicionar" data-sku="' + escHtml(sku) + '"' + (acur.salvando ? ' disabled' : '') + '>Salvar observação</button>' +
+        '<button class="btn-primary" data-acur-act="adicionar" data-chave="' + escHtml(chave) + '" data-sku="' + escHtml(sku) + '"' + (ocId ? ' data-oc="' + escHtml(ocId) + '"' : '') + (acur.salvando ? ' disabled' : '') + '>Salvar no histórico</button>' +
+        (acur.salvoMsg[chave] ? '<span style="color:var(--status-good); font-size:.8rem; font-weight:700;">✓ Salvo no histórico</span>' : '') +
       '</div>' +
-      (acur.erro ? '<div style="color:var(--status-critical); font-size:.8rem; margin-top:6px;">⚠ ' + escHtml(acur.erro) + '</div>' : '') +
-    '</div>';
+      (acur.erro ? '<div style="color:var(--status-critical); font-size:.8rem; margin-top:6px;">⚠ ' + escHtml(acur.erro) + '</div>' : '');
   }
 
-  function acurHistoricoHtml(){
-    var total = acur.hist ? acur.hist.length : null;
-    var cab = '<div class="card-head" style="cursor:pointer;" data-acur-act="toggle-hist">' +
-      '<div class="card-title">' + (acur.histAberto ? "▾" : "▸") + ' Histórico completo' + (total !== null ? ' (' + fmtInt(total) + ' registros)' : '') + '</div>' +
-      '<span style="color:var(--ink-3); font-size:.78rem;">' + (acur.histAberto ? "clique para minimizar" : "clique para abrir — fica salvo para sempre") + '</span></div>';
-    if (!acur.histAberto) return '<section class="sector"><div class="card">' + cab + '</div></section>';
-    var corpo;
-    if (acur.histCarregando) corpo = '<div style="color:var(--ink-3);">Carregando histórico…</div>';
-    else if (acur.histErro) corpo = '<div style="color:var(--status-critical);">⚠ ' + escHtml(acur.histErro) + '</div>';
-    else if (!acur.hist || !acur.hist.length) corpo = '<div style="color:var(--ink-3);">Sem histórico ainda.</div>';
-    else {
-      var datasInv = {}; (acur.cache ? acur.cache.itens : []).forEach(function(i){ datasInv[i.sku] = i.data_inventario; });
-      corpo = '<div class="btn-row" style="margin-bottom:8px;"><input class="search-input" type="text" placeholder="Filtrar por SKU…" data-acur-hist-filtro></div>' +
-        '<div class="table-wrap" style="max-height:480px; overflow-y:auto;"><table><thead><tr><th>Checagem</th><th>SKU</th><th>Data</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acuracidade</th><th>Status</th></tr></thead><tbody>' +
-        acur.hist.map(function(r){
-          var dif = Number(r.wms_comparado) - Number(r.tiny_total);
-          return '<tr data-acur-hist-sku="' + escHtml(String(r.sku).toUpperCase()) + '">' +
-            '<td>' + acurDataBr(r.data) + '</td><td><strong>' + escHtml(r.sku) + '</strong></td>' +
-            '<td>' + acurDataBr(datasInv[r.sku]) + '</td>' +
-            '<td>' + fmtInt(Number(r.contado)) + '</td><td>' + fmtInt(Number(r.tiny_pr)) + '</td><td>' + fmtInt(Number(r.tiny_sc)) + '</td>' +
-            '<td>' + fmtInt(Number(r.tiny_total)) + '</td><td>' + fmtInt(Number(r.wms_comparado)) + '</td>' +
-            '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + (dif > 0 ? "+" : "") + fmtInt(dif) + '</td>' +
-            '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
-            '<td>' + (r.status === "OK" ? '<span class="pill done">OK</span>' : '<span class="pill critical">' + escHtml(r.status) + '</span>') + '</td></tr>';
-        }).join("") + '</tbody></table></div>';
+  function acurObsItem(o){
+    var cab = '<div style="color:var(--ink-3); font-size:.74rem;">' + acurHora(o.criado_em) +
+      (o.autor ? ' · ' + escHtml(o.autor) : '') +
+      (o.atualizado_em && new Date(o.atualizado_em) - new Date(o.criado_em) > 60000 ? ' · editado ' + acurHora(o.atualizado_em) : '') + '</div>';
+    if (acur.editando === o.id){
+      return '<div style="padding:8px 0; border-bottom:1px solid var(--border); white-space:normal;">' + cab +
+        '<div class="form-field"><textarea data-acur-edit-texto="' + o.id + '" style="min-height:64px; width:100%;">' + escHtml(acur.editTexto) + '</textarea></div>' +
+        '<div class="btn-row" style="margin-top:6px;"><button class="btn-small" data-acur-act="salvar-edicao" data-id="' + o.id + '"' + (acur.salvando ? ' disabled' : '') + '>Salvar</button>' +
+        '<button class="btn-small" data-acur-act="cancelar-edicao">Cancelar</button></div></div>';
     }
-    return '<section class="sector"><div class="card">' + cab + corpo + '</div></section>';
+    var botoes = acur.apagando === o.id
+      ? '<span style="font-size:.78rem; color:var(--status-critical); font-weight:700;">Apagar esta observação?</span> <button class="btn-danger" data-acur-act="confirmar-apagar" data-id="' + o.id + '">Sim, apagar</button> <button class="btn-small" data-acur-act="cancelar-apagar">Não</button>'
+      : '<button class="btn-small" data-acur-act="editar" data-id="' + o.id + '">Editar</button> <button class="btn-danger" data-acur-act="apagar" data-id="' + o.id + '">Apagar</button>';
+    return '<div style="padding:8px 0; border-bottom:1px solid var(--border); white-space:normal;">' + cab +
+      '<div style="white-space:pre-wrap; margin:4px 0 6px; color:var(--ink);">' + escHtml(o.texto) + '</div>' +
+      '<div class="btn-row">' + botoes + '</div></div>';
   }
 
-  function renderAcuracidade(){
+  /* ---------- tabela da última checagem ---------- */
+  function acurTabelaUltima(){
     var c = acur.cache;
-    var ativos = c.itens.filter(function(i){ return i.ativo; });
     var porSkuItem = {}; c.itens.forEach(function(i){ porSkuItem[i.sku] = i; });
     var hoje = c.ultima.filter(function(r){ return porSkuItem[r.sku] && porSkuItem[r.sku].ativo; });
     hoje.sort(function(a,b){ return ((a.status === "OK") - (b.status === "OK")) || a.sku.localeCompare(b.sku); });
-    var ok = hoje.filter(function(r){ return r.status === "OK"; }).length;
-    var div = hoje.length - ok;
-    var exec = c.execs[0] || null;
-    var obsPorSku = {}; c.obs.forEach(function(o){ obsPorSku[o.sku] = (obsPorSku[o.sku] || 0) + 1; });
     var totalPaginas = Math.max(1, Math.ceil(hoje.length / ACUR_POR_PAGINA));
     if (acur.pagina > totalPaginas) acur.pagina = totalPaginas;
     if (acur.pagina < 1) acur.pagina = 1;
     var inicio = (acur.pagina - 1) * ACUR_POR_PAGINA;
-    var hojePagina = hoje.slice(inicio, inicio + ACUR_POR_PAGINA);
+    var pagina = hoje.slice(inicio, inicio + ACUR_POR_PAGINA);
+    var NCOL = 12;
+    var linhas = pagina.map(function(r){
+      var it = porSkuItem[r.sku] || {};
+      var dif = Number(r.wms_comparado) - Number(r.tiny_total);
+      var n = acurObsDoSku(r.sku).length;
+      var aberto = !!acur.obsAberto[r.sku];
+      var oc = acurOcAberta(r.sku);
+      return '<tr>' +
+        '<td>' + acurDataBr(it.data_inventario) + '</td>' +
+        '<td><strong>' + escHtml(r.sku) + '</strong>' + (oc ? '<div style="color:var(--status-critical); font-size:.72rem;">divergente há ' + acurDuracao(Date.now() - new Date(oc.detectada_em)) + '</div>' : '') + '</td>' +
+        '<td>' + fmtInt(Number(r.contado)) + '</td>' +
+        '<td>' + fmtInt(Number(r.tiny_pr)) + '</td>' +
+        '<td>' + fmtInt(Number(r.tiny_sc)) + '</td>' +
+        '<td><strong>' + fmtInt(Number(r.tiny_total)) + '</strong></td>' +
+        '<td><strong>' + fmtInt(Number(r.wms_comparado)) + '</strong> <span style="color:var(--ink-3); font-size:.76rem;">(PS ' + fmtInt(Number(r.wms_ps)) + (Number(r.wms_rc) ? ' + RC ' + fmtInt(Number(r.wms_rc)) : '') + (Number(r.wms_full) ? ' + Full ' + fmtInt(Number(r.wms_full)) : '') + ')</span></td>' +
+        '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + acurDif(dif) + '</td>' +
+        '<td style="color:' + acurCor(it.acuracidade_antes) + ';">' + acurPct(it.acuracidade_antes) + '</td>' +
+        '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
+        '<td>' + acurPill(r.status) + '<div style="color:var(--ink-3); font-size:.7rem;">' + acurHora(r.verificado_em).slice(11) + '</div></td>' +
+        '<td><button class="btn-small" data-acur-act="toggle-obs" data-sku="' + escHtml(r.sku) + '">' + (aberto ? "▾ " : "📝 ") + "Observação" + (n ? ' <span style="color:var(--ink-3);">(' + n + ' no histórico)</span>' : '') + '</button></td>' +
+      '</tr>' +
+      (aberto ? '<tr><td colspan="' + NCOL + '" style="background:var(--surface-2); white-space:normal;">' +
+        '<div style="padding:6px 4px 10px;"><div style="font-weight:700;">Nova observação — ' + escHtml(r.sku) + '</div>' +
+        '<div style="color:var(--ink-3); font-size:.78rem;">' + (oc ? 'Fica ligada à ocorrência de divergência aberta em ' + acurHora(oc.detectada_em) + '.' : 'Fica registrada no histórico do SKU.') + ' Para ver, editar ou apagar: Histórico › Observações.</div>' +
+        acurComposer("sku:" + r.sku, r.sku, oc ? oc.id : null, "O que foi encontrado, o que foi feito para resolver a divergência…") +
+        '</div></td></tr>' : '');
+    }).join("");
     var paginador = totalPaginas <= 1 ? '' :
       '<div class="btn-row" style="margin-top:10px; justify-content:space-between;">' +
-        '<span style="color:var(--ink-3); font-size:.8rem;">Mostrando ' + (inicio + 1) + '–' + (inicio + hojePagina.length) + ' de ' + hoje.length + ' SKUs</span>' +
+        '<span style="color:var(--ink-3); font-size:.8rem;">Mostrando ' + (inicio + 1) + '–' + (inicio + pagina.length) + ' de ' + hoje.length + ' SKUs</span>' +
         '<div class="btn-row">' +
           '<button class="btn-small" data-acur-act="pagina" data-pag="' + (acur.pagina - 1) + '"' + (acur.pagina === 1 ? ' disabled' : '') + '>‹ Anterior</button>' +
           Array.apply(null, Array(totalPaginas)).map(function(_, i){
@@ -3746,61 +3763,240 @@ try {
           '<button class="btn-small" data-acur-act="pagina" data-pag="' + (acur.pagina + 1) + '"' + (acur.pagina === totalPaginas ? ' disabled' : '') + '>Próxima ›</button>' +
         '</div>' +
       '</div>';
+    return {
+      qtd:hoje.length,
+      ok:hoje.filter(function(r){ return r.status === "OK"; }).length,
+      html:'<section class="sector"><div class="card">' +
+        '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + (hoje.length ? " · " + hoje.length + " SKUs" : "") + '</div></div>' +
+        (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th><th>Observações</th></tr></thead><tbody>' + linhas + '</tbody></table></div>' + paginador
+          : '<div style="color:var(--ink-3);">Ainda sem checagem — o GLog roda todo dia às 07h (ou assim que o PC ligar).</div>') +
+        '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Data = dia do inventário (ajuste no Tiny). Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo). Horário abaixo do status = última verificação do SKU.</div>' +
+      '</div></section>'
+    };
+  }
 
+  /* ---------- relatório (histórico) ---------- */
+  function acurNoPeriodo(ts){
+    var h = acur.hist, d = ts ? String(isoDate(new Date(ts))) : "";
+    if (h.de && d < h.de) return false;
+    if (h.ate && d > h.ate) return false;
+    return true;
+  }
+  function acurFiltroSku(sku){
+    var q = acur.hist.filtro.trim().toUpperCase();
+    return !q || String(sku).toUpperCase().indexOf(q) >= 0;
+  }
+  function acurOcorrFiltradas(){
+    var h = acur.hist;
+    return acur.cache.ocorr.filter(function(o){
+      if (h.status === "abertas" && o.status !== "ABERTA") return false;
+      if (h.status === "resolvidas" && o.status !== "RESOLVIDA") return false;
+      return acurNoPeriodo(o.detectada_em) && acurFiltroSku(o.sku);
+    }).sort(function(a,b){ return String(b.detectada_em).localeCompare(String(a.detectada_em)); });
+  }
+  function acurObsFiltradas(){
+    return acur.cache.obs.filter(function(o){ return acurNoPeriodo(o.criado_em) && acurFiltroSku(o.sku); });
+  }
+  function acurChecagensFiltradas(){
+    var h = acur.hist;
+    return (h.checagens || []).filter(function(r){
+      if (h.de && r.data < h.de) return false;
+      if (h.ate && r.data > h.ate) return false;
+      return acurFiltroSku(r.sku);
+    });
+  }
+  function acurTempoAberto(o){
+    var fim = o.resolvida_em ? new Date(o.resolvida_em) : new Date();
+    return fim - new Date(o.detectada_em);
+  }
+
+  function acurRelatorioResumo(lista){
+    var abertas = lista.filter(function(o){ return o.status === "ABERTA"; });
+    var resolvidas = lista.filter(function(o){ return o.status === "RESOLVIDA"; });
+    var tempoMedio = resolvidas.length ? resolvidas.reduce(function(s,o){ return s + acurTempoAberto(o); }, 0) / resolvidas.length : null;
+    var unidades = lista.reduce(function(s,o){ return s + Math.abs(Number(o.diferenca_det) || 0); }, 0);
+    var porSku = {}; lista.forEach(function(o){ porSku[o.sku] = (porSku[o.sku] || 0) + 1; });
+    var reinc = Object.keys(porSku).filter(function(k){ return porSku[k] > 1; });
+    var causas = {}; resolvidas.forEach(function(o){ var k = o.como_resolvido || "—"; causas[k] = (causas[k] || 0) + 1; });
+    var causasTxt = Object.keys(causas).sort(function(a,b){ return causas[b] - causas[a]; }).map(function(k){ return escHtml(k) + ": " + causas[k]; }).join(" · ");
+    return '<div class="kpi-grid" style="margin:10px 0;">' +
+      acurKpi("Ocorrências", fmtInt(lista.length), Object.keys(porSku).length + " SKU(s)") +
+      acurKpi("Abertas", fmtInt(abertas.length), abertas.length ? "ainda divergentes" : "nenhuma pendente", abertas.length ? "var(--status-critical)" : "var(--status-good)") +
+      acurKpi("Resolvidas", fmtInt(resolvidas.length), causasTxt || "—", "var(--status-good)") +
+      acurKpi("Tempo médio até resolver", tempoMedio === null ? "—" : acurDuracao(tempoMedio), "da detecção até voltar a 100%") +
+      acurKpi("Unidades divergentes", fmtInt(unidades), "soma de |WMS − Tiny| na detecção") +
+      acurKpi("SKUs reincidentes", fmtInt(reinc.length), reinc.length ? escHtml(reinc.slice(0,4).join(", ")) + (reinc.length > 4 ? "…" : "") : "divergiram mais de uma vez") +
+    '</div>';
+  }
+
+  function acurAbaOcorrencias(lista){
+    if (!lista.length) return '<div style="color:var(--ink-3); padding:8px 0;">Nenhuma ocorrência de divergência com esses filtros.</div>';
+    var NCOL = 12;
+    return '<div class="table-wrap"><table><thead><tr><th>SKU</th><th>Status</th><th>Detectada em</th><th>Tiny × WMS (detecção)</th><th>Divergência</th><th>Acur.</th><th>Inventário</th><th>Resolvida em</th><th>Tempo em aberto</th><th>Como foi resolvida</th><th>Tiny × WMS (solução)</th><th>Observações</th></tr></thead><tbody>' +
+      lista.map(function(o){
+        var obs = acur.cache.obs.filter(function(x){ return x.ocorrencia_id === o.id; });
+        var aberto = !!acur.hist.ocAberta[o.id];
+        var reinv = o.data_inventario_res && o.data_inventario && o.data_inventario_res !== o.data_inventario;
+        return '<tr>' +
+          '<td><strong>' + escHtml(o.sku) + '</strong></td>' +
+          '<td>' + acurPill(o.status) + '</td>' +
+          '<td>' + acurHora(o.detectada_em) + '</td>' +
+          '<td>' + fmtInt(Number(o.tiny_det)) + ' × ' + fmtInt(Number(o.wms_det)) + ' <span style="color:var(--ink-3); font-size:.74rem;">(PR ' + fmtInt(Number(o.tiny_pr_det)) + ' · SC ' + fmtInt(Number(o.tiny_sc_det)) + ')</span></td>' +
+          '<td style="color:var(--status-critical); font-weight:700;">' + acurDif(o.diferenca_det) + (Number(o.maior_diferenca) > Math.abs(Number(o.diferenca_det)) ? ' <span style="color:var(--ink-3); font-weight:400; font-size:.74rem;">(máx. ' + fmtInt(Number(o.maior_diferenca)) + ')</span>' : '') + '</td>' +
+          '<td style="color:' + acurCor(o.acuracidade_det) + ';">' + acurPct(o.acuracidade_det) + '</td>' +
+          '<td>' + acurDataBr(o.data_inventario) + ' <span style="color:var(--ink-3); font-size:.74rem;">(' + fmtInt(Number(o.inventariado)) + ' un)</span>' + (reinv ? '<div style="font-size:.72rem; color:var(--accent-strong);">reinventariado ' + acurDataBr(o.data_inventario_res) + '</div>' : '') + '</td>' +
+          '<td>' + (o.resolvida_em ? acurHora(o.resolvida_em) : '<span style="color:var(--ink-3);">—</span>') + '</td>' +
+          '<td>' + acurDuracao(acurTempoAberto(o)) + (o.status === "ABERTA" ? ' <span style="color:var(--ink-3); font-size:.74rem;">(até agora)</span>' : '') + '</td>' +
+          '<td>' + escHtml(o.como_resolvido || "—") + '</td>' +
+          '<td>' + (o.status === "RESOLVIDA" ? fmtInt(Number(o.tiny_res)) + ' × ' + fmtInt(Number(o.wms_res)) : '<span style="color:var(--ink-3);">agora ' + fmtInt(Number(o.tiny_atual)) + ' × ' + fmtInt(Number(o.wms_atual)) + '</span>') + '</td>' +
+          '<td><button class="btn-small" data-acur-act="toggle-oc" data-id="' + o.id + '">' + (aberto ? "▾ " : "▸ ") + (obs.length ? obs.length + " obs." : "Adicionar") + '</button></td>' +
+        '</tr>' +
+        (aberto ? '<tr><td colspan="' + NCOL + '" style="background:var(--surface-2); white-space:normal;"><div style="padding:6px 4px 10px;">' +
+          '<div style="font-weight:700;">Observações / plano de ação — ' + escHtml(o.sku) + ' · ocorrência de ' + acurHora(o.detectada_em) + '</div>' +
+          (obs.length ? obs.map(acurObsItem).join("") : '<div style="color:var(--ink-3); font-size:.8rem; padding:4px 0;">Nenhuma observação nesta ocorrência.</div>') +
+          acurComposer("oc:" + o.id, o.sku, o.id, "Plano de ação, causa encontrada, o que foi ajustado…") +
+        '</div></td></tr>' : '');
+      }).join("") + '</tbody></table></div>';
+  }
+
+  function acurAbaObservacoes(lista){
+    if (!lista.length) return '<div style="color:var(--ink-3); padding:8px 0;">Nenhuma observação com esses filtros.</div>';
+    var ocPorId = {}; acur.cache.ocorr.forEach(function(o){ ocPorId[o.id] = o; });
+    return '<div class="table-wrap"><table><thead><tr><th>Data / hora</th><th>SKU</th><th>Ocorrência</th><th>Observação</th></tr></thead><tbody>' +
+      lista.map(function(o){
+        var oc = ocPorId[o.ocorrencia_id];
+        return '<tr><td>' + acurHora(o.criado_em) + '</td><td><strong>' + escHtml(o.sku) + '</strong></td>' +
+          '<td>' + (oc ? acurPill(oc.status) + ' <span style="color:var(--ink-3); font-size:.74rem;">' + acurHora(oc.detectada_em) + '</span>' : '<span style="color:var(--ink-3);">— (SKU sem divergência)</span>') + '</td>' +
+          '<td style="white-space:normal; min-width:320px;">' + acurObsItem(o) + '</td></tr>';
+      }).join("") + '</tbody></table></div>';
+  }
+
+  function acurAbaChecagens(){
+    var h = acur.hist;
+    if (h.carregando) return '<div style="color:var(--ink-3);">Carregando checagens…</div>';
+    if (h.erro) return '<div style="color:var(--status-critical);">⚠ ' + escHtml(h.erro) + '</div>';
+    var lista = acurChecagensFiltradas();
+    if (!lista.length) return '<div style="color:var(--ink-3); padding:8px 0;">Nenhuma checagem com esses filtros.</div>';
+    var datasInv = {}; acur.cache.itens.forEach(function(i){ datasInv[i.sku] = i.data_inventario; });
+    return '<div style="color:var(--ink-3); font-size:.78rem; margin-bottom:6px;">' + fmtInt(lista.length) + ' registros (um por SKU por dia — o último valor do dia).</div>' +
+      '<div class="table-wrap" style="max-height:480px; overflow-y:auto;"><table><thead><tr><th>Checagem</th><th>SKU</th><th>Data do inventário</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acuracidade</th><th>Status</th></tr></thead><tbody>' +
+      lista.map(function(r){
+        var dif = Number(r.wms_comparado) - Number(r.tiny_total);
+        return '<tr><td>' + acurDataBr(r.data) + '</td><td><strong>' + escHtml(r.sku) + '</strong></td>' +
+          '<td>' + acurDataBr(datasInv[r.sku]) + '</td>' +
+          '<td>' + fmtInt(Number(r.contado)) + '</td><td>' + fmtInt(Number(r.tiny_pr)) + '</td><td>' + fmtInt(Number(r.tiny_sc)) + '</td>' +
+          '<td>' + fmtInt(Number(r.tiny_total)) + '</td><td>' + fmtInt(Number(r.wms_comparado)) + '</td>' +
+          '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + acurDif(dif) + '</td>' +
+          '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
+          '<td>' + acurPill(r.status) + '</td></tr>';
+      }).join("") + '</tbody></table></div>';
+  }
+
+  function acurRelatorioHtml(){
+    var h = acur.hist, c = acur.cache;
+    var cab = '<div class="card-head" style="cursor:pointer;" data-acur-act="toggle-hist">' +
+      '<div class="card-title">' + (h.aberto ? "▾" : "▸") + ' Histórico · Relatório de divergências <span style="color:var(--ink-3); font-weight:500;">(' + c.ocorr.length + ' ocorrência(s), ' + c.obs.length + ' observação(ões))</span></div>' +
+      '<span style="color:var(--ink-3); font-size:.78rem;">' + (h.aberto ? "clique para minimizar" : "clique para abrir — fica salvo para sempre") + '</span></div>';
+    if (!h.aberto) return '<section class="sector"><div class="card">' + cab + '</div></section>';
+    var ocorr = acurOcorrFiltradas(), obs = acurObsFiltradas();
+    var abaBtn = function(id, label){
+      var at = h.aba === id;
+      return '<button class="btn-small" data-acur-act="aba" data-aba="' + id + '"' + (at ? ' style="background:var(--accent); color:var(--accent-ink); border-color:var(--accent);"' : '') + '>' + label + '</button>';
+    };
+    var filtros = '<div class="btn-row" style="margin-top:6px;">' +
+      '<div class="filter-field"><span class="fl">De</span><input class="date-input" type="date" data-acur-f="de" value="' + escHtml(h.de) + '"></div>' +
+      '<div class="filter-field"><span class="fl">Até</span><input class="date-input" type="date" data-acur-f="ate" value="' + escHtml(h.ate) + '"></div>' +
+      '<div class="filter-field"><span class="fl">Status</span><select class="select" data-acur-f="status">' +
+        [["todas","Todas"],["abertas","Abertas"],["resolvidas","Resolvidas"]].map(function(x){ return '<option value="' + x[0] + '"' + (h.status === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join("") +
+      '</select></div>' +
+      '<div class="filter-field grow"><span class="fl">SKU</span><input class="search-input" type="text" placeholder="Filtrar por SKU…" data-acur-hist-filtro value="' + escHtml(h.filtro) + '"></div>' +
+      '<div class="filter-field"><span class="fl">&nbsp;</span><button class="btn-small" data-acur-act="limpar-filtros">Limpar filtros</button></div>' +
+      '<div class="filter-field"><span class="fl">&nbsp;</span><button class="btn-primary" data-acur-act="exportar">⬇ Exportar para planilha (CSV)</button></div>' +
+    '</div>';
+    var corpo = h.aba === "observacoes" ? acurAbaObservacoes(obs) : h.aba === "checagens" ? acurAbaChecagens() : acurAbaOcorrencias(ocorr);
+    return '<section class="sector"><div class="card">' + cab +
+      '<div style="color:var(--ink-3); font-size:.8rem;">Cada ocorrência começa quando o SKU sai de 100% e termina quando Tiny e WMS voltam a bater. Os filtros valem para as três abas e para a exportação.</div>' +
+      filtros + acurRelatorioResumo(ocorr) +
+      '<div class="btn-row" style="margin-bottom:8px;">' + abaBtn("ocorrencias", "Ocorrências (" + ocorr.length + ")") + abaBtn("observacoes", "Observações (" + obs.length + ")") + abaBtn("checagens", "Checagens diárias") + '</div>' +
+      corpo + '</div></section>';
+  }
+
+  /* ---------- exportação CSV (abre direto no Excel / Google Sheets) ---------- */
+  function acurCsvCampo(v){
+    if (v === null || v === undefined) return "";
+    var s = typeof v === "number" ? String(v).replace(".", ",") : String(v);
+    return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function acurBaixarCsv(nome, cabecalho, linhas){
+    var txt = "﻿" + [cabecalho].concat(linhas).map(function(l){ return l.map(acurCsvCampo).join(";"); }).join("\r\n");
+    var blob = new Blob([txt], {type:"text/csv;charset=utf-8"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = nome;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function acurNum(v){ return v === null || v === undefined || v === "" ? "" : Number(v); }
+  function acurExportar(){
+    var h = acur.hist, hoje = isoDate(new Date());
+    if (h.aba === "observacoes"){
+      var ocPorId = {}; acur.cache.ocorr.forEach(function(o){ ocPorId[o.id] = o; });
+      return acurBaixarCsv("acuracidade-observacoes-" + hoje + ".csv",
+        ["Data","Hora","SKU","Autor","Observação","Ocorrência detectada em","Status da ocorrência","Editada em"],
+        acurObsFiltradas().map(function(o){
+          var oc = ocPorId[o.ocorrencia_id], dh = acurHora(o.criado_em);
+          return [dh.slice(0,10), dh.slice(11), o.sku, o.autor || "", o.texto, oc ? acurHora(oc.detectada_em) : "", oc ? (oc.status === "ABERTA" ? "Aberta" : "Resolvida") : "",
+            o.atualizado_em && new Date(o.atualizado_em) - new Date(o.criado_em) > 60000 ? acurHora(o.atualizado_em) : ""];
+        }));
+    }
+    if (h.aba === "checagens"){
+      var datasInv = {}; acur.cache.itens.forEach(function(i){ datasInv[i.sku] = i.data_inventario; });
+      return acurBaixarCsv("acuracidade-checagens-" + hoje + ".csv",
+        ["Checagem","SKU","Data do inventário","Inventariado","Tiny PR","Tiny SC","Tiny PR+SC","WMS (PS+RC+Full)","Diferença (WMS − Tiny)","Acuracidade (%)","Status"],
+        acurChecagensFiltradas().map(function(r){
+          return [acurDataBr(r.data), r.sku, acurDataBr(datasInv[r.sku]), acurNum(r.contado), acurNum(r.tiny_pr), acurNum(r.tiny_sc), acurNum(r.tiny_total), acurNum(r.wms_comparado),
+            Number(r.wms_comparado) - Number(r.tiny_total), acurNum(r.acuracidade), r.status];
+        }));
+    }
+    acurBaixarCsv("acuracidade-ocorrencias-" + hoje + ".csv",
+      ["SKU","Status","Detectada em","Data do inventário","Inventariado","Tiny PR (detecção)","Tiny SC (detecção)","Tiny PR+SC (detecção)","WMS (detecção)","Divergência (WMS − Tiny)","Divergência absoluta","Maior divergência","Acuracidade na detecção (%)","Resolvida em","Tempo em aberto (horas)","Como foi resolvida","Tiny (solução)","WMS (solução)","Reinventariado em","Qtde de observações","Observações"],
+      acurOcorrFiltradas().map(function(o){
+        var obs = acur.cache.obs.filter(function(x){ return x.ocorrencia_id === o.id; }).slice().reverse();
+        var reinv = o.data_inventario_res && o.data_inventario && o.data_inventario_res !== o.data_inventario ? acurDataBr(o.data_inventario_res) : "";
+        return [o.sku, o.status === "ABERTA" ? "Aberta" : "Resolvida", acurHora(o.detectada_em), acurDataBr(o.data_inventario), acurNum(o.inventariado),
+          acurNum(o.tiny_pr_det), acurNum(o.tiny_sc_det), acurNum(o.tiny_det), acurNum(o.wms_det), acurNum(o.diferenca_det), Math.abs(Number(o.diferenca_det) || 0), acurNum(o.maior_diferenca), acurNum(o.acuracidade_det),
+          o.resolvida_em ? acurHora(o.resolvida_em) : "", Math.round(acurTempoAberto(o) / 36e5 * 10) / 10, o.como_resolvido || "",
+          o.status === "RESOLVIDA" ? acurNum(o.tiny_res) : "", o.status === "RESOLVIDA" ? acurNum(o.wms_res) : "", reinv, obs.length,
+          obs.map(function(x){ return acurHora(x.criado_em) + (x.autor ? " (" + x.autor + ")" : "") + ": " + x.texto; }).join(" | ")];
+      }));
+  }
+
+  /* ---------- montagem ---------- */
+  function renderAcuracidade(){
+    var c = acur.cache;
+    var ativos = c.itens.filter(function(i){ return i.ativo; });
+    var tabela = acurTabelaUltima();
+    var div = tabela.qtd - tabela.ok;
+    var exec = c.execs[0] || null;
+    var abertas = c.ocorr.filter(function(o){ return o.status === "ABERTA"; }).length;
     var kpis = '<section class="sector"><div class="kpi-grid">' +
       acurKpi("Itens monitorados", fmtInt(ativos.length), "coluna INVENTARIADO da planilha") +
-      acurKpi("100% na última checagem", fmtInt(ok), c.ultimaData ? acurDataBr(c.ultimaData) : "ainda sem checagem", "var(--status-good)") +
-      acurKpi("Divergentes", fmtInt(div), div ? "abaixo de 100%" : "tudo batendo", div ? "var(--status-critical)" : "var(--status-good)") +
-      acurKpi("Última checagem", exec ? acurHora(exec.concluido_em) : "—", exec ? ("Slack: " + (/SLACK_BOT_TOKEN/.test(exec.slack_status || "") ? "ainda não configurado" : escHtml(exec.slack_status || "—"))) : "") +
+      acurKpi("100% agora", fmtInt(tabela.ok), c.ultimaData ? "checagem de " + acurDataBr(c.ultimaData) : "ainda sem checagem", "var(--status-good)") +
+      acurKpi("Divergentes", fmtInt(div), div ? abertas + " ocorrência(s) aberta(s) — rechecadas de hora em hora" : "tudo batendo", div ? "var(--status-critical)" : "var(--status-good)") +
+      acurKpi("Última checagem das 07h", exec ? acurHora(exec.concluido_em) : "—", exec ? ("Slack: " + (/SLACK_BOT_TOKEN/.test(exec.slack_status || "") ? "ainda não configurado" : escHtml(exec.slack_status || "—"))) : "") +
     '</div></section>';
-
-    var NCOL = 11;
-    var linhas = hojePagina.map(function(r){
-      var it = porSkuItem[r.sku] || {};
-      var dif = Number(r.wms_comparado) - Number(r.tiny_total);
-      var pill = r.status === "OK" ? '<span class="pill done">OK</span>' : '<span class="pill critical">' + escHtml(r.status) + '</span>';
-      var n = obsPorSku[r.sku] || 0;
-      var aberto = !!acur.obsAberto[r.sku];
-      return '<tr>' +
-        '<td>' + acurDataBr(it.data_inventario) + '</td>' +
-        '<td><strong>' + escHtml(r.sku) + '</strong></td>' +
-        '<td>' + fmtInt(Number(r.contado)) + '</td>' +
-        '<td>' + fmtInt(Number(r.tiny_pr)) + '</td>' +
-        '<td>' + fmtInt(Number(r.tiny_sc)) + '</td>' +
-        '<td><strong>' + fmtInt(Number(r.tiny_total)) + '</strong></td>' +
-        '<td><strong>' + fmtInt(Number(r.wms_comparado)) + '</strong> <span style="color:var(--ink-3); font-size:.76rem;">(PS ' + fmtInt(Number(r.wms_ps)) + (Number(r.wms_rc) ? ' + RC ' + fmtInt(Number(r.wms_rc)) : '') + (Number(r.wms_full) ? ' + Full ' + fmtInt(Number(r.wms_full)) : '') + ')</span></td>' +
-        '<td style="color:' + (dif ? "var(--status-critical)" : "var(--ink-3)") + ';">' + (dif > 0 ? "+" : "") + fmtInt(dif) + '</td>' +
-        '<td style="color:' + acurCor(it.acuracidade_antes) + ';">' + acurPct(it.acuracidade_antes) + '</td>' +
-        '<td style="color:' + acurCor(r.acuracidade) + '; font-weight:700;">' + acurPct(r.acuracidade) + '</td>' +
-        '<td>' + pill + '</td>' +
-        '<td><button class="btn-small" data-acur-act="toggle-obs" data-sku="' + escHtml(r.sku) + '">' + (aberto ? "▾ " : "📝 ") + (n ? n + (n === 1 ? " obs." : " obs.") : "Adicionar") + '</button></td>' +
-      '</tr>' +
-      (aberto ? '<tr><td colspan="' + (NCOL + 1) + '" style="background:var(--surface-2);">' + acurObsPainel(r.sku, c.obs) + '</td></tr>' : '');
-    }).join("");
-    var tabela = '<section class="sector"><div class="card">' +
-      '<div class="card-head"><div class="card-title">Última checagem' + (c.ultimaData ? " · " + acurDataBr(c.ultimaData) : "") + (hoje.length ? " · " + hoje.length + " SKUs" : "") + '</div></div>' +
-      (hoje.length ? '<div class="table-wrap"><table><thead><tr><th>Data</th><th>SKU</th><th>Inventariado</th><th>Tiny PR</th><th>Tiny SC</th><th>Tiny PR+SC</th><th>WMS (PS+RC+Full)</th><th>Diferença</th><th>Acur. antes</th><th>Acur. hoje</th><th>Status</th><th>Observações</th></tr></thead><tbody>' + linhas + '</tbody></table></div>' + paginador
-        : '<div style="color:var(--ink-3);">Ainda sem checagem — o Glog roda todo dia às 07h (ou assim que o PC ligar).</div>') +
-      '<div style="color:var(--ink-3); font-size:.76rem; margin-top:8px;">Data = dia do inventário (ajuste no Tiny). Diferença = WMS − Tiny (+ = WMS tem mais). "Acur. antes" = foto do inventário (colunas da aba Resumo).</div>' +
-    '</div></section>';
-
-    return kpis + tabela + acurHistoricoHtml();
+    return kpis + tabela.html + acurRelatorioHtml();
   }
 
   function acurPintar(){
     var target = document.getElementById("acuracidade-widget");
     if (!target || !acur.cache) return;
-    // Guarda foco/cursor de um campo sendo digitado (re-render por realtime não pode apagar o que a pessoa escreve).
+    // Guarda foco/cursor de um campo sendo digitado (re-render não pode apagar o que a pessoa escreve).
     var ativo = document.activeElement, chave = null, pos = null;
     if (ativo && target.contains(ativo)){
       chave = ["data-acur-rascunho","data-acur-edit-texto","data-acur-autor","data-acur-hist-filtro"].filter(function(a){ return ativo.hasAttribute(a); })[0] || null;
       if (chave) { chave = '[' + chave + (ativo.getAttribute(chave) ? '="' + ativo.getAttribute(chave) + '"' : '') + ']'; try { pos = ativo.selectionStart; } catch(e) {} }
     }
-    var filtro = target.querySelector("[data-acur-hist-filtro]");
-    var filtroValor = filtro ? filtro.value : "";
     target.innerHTML = renderAcuracidade();
-    var novoFiltro = target.querySelector("[data-acur-hist-filtro]");
-    if (novoFiltro && filtroValor) { novoFiltro.value = filtroValor; acurFiltrarHist(filtroValor); }
     if (chave){
       var el = target.querySelector(chave);
       if (el) { el.focus(); try { if (pos !== null) el.setSelectionRange(pos, pos); } catch(e) {} }
@@ -3808,15 +4004,9 @@ try {
     acurWire(target);
   }
 
-  function acurFiltrarHist(valor){
-    var q = String(valor || "").trim().toUpperCase();
-    document.querySelectorAll("#acuracidade-widget [data-acur-hist-sku]").forEach(function(tr){
-      tr.style.display = !q || tr.getAttribute("data-acur-hist-sku").indexOf(q) >= 0 ? "" : "none";
-    });
-  }
-
-  async function acurCarregarHistorico(){
-    acur.histCarregando = true; acur.histErro = null; acurPintar();
+  async function acurCarregarChecagens(){
+    var h = acur.hist;
+    h.carregando = true; h.erro = null; acurPintar();
     try {
       var todas = [], passo = 1000;
       for (var de = 0; de < 1000000; de += passo){
@@ -3827,11 +4017,11 @@ try {
         todas = todas.concat(res.data || []);
         if (!res.data || res.data.length < passo) break;
       }
-      acur.hist = todas;
+      h.checagens = todas;
     } catch(err) {
-      acur.histErro = "Não consegui carregar o histórico: " + (err && err.message ? err.message : String(err));
+      h.erro = "Não consegui carregar as checagens: " + (err && err.message ? err.message : String(err));
     }
-    acur.histCarregando = false; acurPintar();
+    h.carregando = false; acurPintar();
   }
 
   async function acurRecarregarObs(){
@@ -3841,13 +4031,17 @@ try {
   }
 
   async function acurAcao(act, el){
-    var id = el.getAttribute("data-id"), sku = el.getAttribute("data-sku");
+    var id = el.getAttribute("data-id"), sku = el.getAttribute("data-sku"), h = acur.hist;
     acur.erro = null;
-    if (act === "toggle-hist"){
-      acur.histAberto = !acur.histAberto;
-      if (acur.histAberto && !acur.hist) return acurCarregarHistorico();
+    if (act === "toggle-hist"){ h.aberto = !h.aberto; return acurPintar(); }
+    if (act === "aba"){
+      h.aba = el.getAttribute("data-aba");
+      if (h.aba === "checagens" && !h.checagens) return acurCarregarChecagens();
       return acurPintar();
     }
+    if (act === "limpar-filtros"){ h.de = ""; h.ate = ""; h.status = "todas"; h.filtro = ""; return acurPintar(); }
+    if (act === "exportar"){ return acurExportar(); }
+    if (act === "toggle-oc"){ h.ocAberta[id] = !h.ocAberta[id]; return acurPintar(); }
     if (act === "pagina"){
       acur.pagina = Number(el.getAttribute("data-pag")) || 1;
       acurPintar();
@@ -3855,7 +4049,7 @@ try {
       if (card) card.scrollIntoView({block:"nearest"});
       return;
     }
-    if (act === "toggle-obs"){ acur.obsAberto[sku] = !acur.obsAberto[sku]; return acurPintar(); }
+    if (act === "toggle-obs"){ acur.obsAberto[sku] = !acur.obsAberto[sku]; acur.salvoMsg["sku:" + sku] = false; return acurPintar(); }
     if (act === "editar"){
       var o = acur.cache.obs.filter(function(x){ return x.id === id; })[0];
       acur.editando = id; acur.editTexto = o ? o.texto : ""; acur.apagando = null; acurPintar();
@@ -3871,11 +4065,16 @@ try {
     try {
       var res;
       if (act === "adicionar"){
-        var texto = String(acur.rascunho[sku] || "").trim();
+        var chave = el.getAttribute("data-chave");
+        var texto = String(acur.rascunho[chave] || "").trim();
         if (!texto) throw new Error("Escreva a observação antes de salvar.");
-        res = await sb.from("acuracidade_observacoes").insert({sku:sku, texto:texto, autor:acur.autor.trim() || null, data_ref:acur.cache.ultimaData});
+        res = await sb.from("acuracidade_observacoes").insert({
+          sku:sku, texto:texto, autor:acur.autor.trim() || null, data_ref:acur.cache.ultimaData,
+          ocorrencia_id:el.getAttribute("data-oc") || null
+        });
         if (res.error) throw new Error(res.error.message);
-        acur.rascunho[sku] = "";
+        acur.rascunho[chave] = "";
+        acur.salvoMsg[chave] = true;
       } else if (act === "salvar-edicao"){
         var t = String(acur.editTexto || "").trim();
         if (!t) throw new Error("A observação não pode ficar vazia — use Apagar se quiser remover.");
@@ -3894,12 +4093,14 @@ try {
     acur.salvando = false; acurPintar();
   }
 
+  var acurFiltroTimer = null;
   function acurWire(target){
     if (target.__acurWired) return;
     target.__acurWired = true;
     target.addEventListener("click", function(ev){
       var el = ev.target.closest("[data-acur-act]");
       if (!el || !target.contains(el) || el.disabled) return;
+      if (el.tagName === "DIV" && ev.target.closest("button, input, select, textarea") && ev.target.closest("button, input, select, textarea") !== el) return;
       acurAcao(el.getAttribute("data-acur-act"), el);
     });
     target.addEventListener("input", function(ev){
@@ -3907,7 +4108,17 @@ try {
       if (el.hasAttribute("data-acur-rascunho")) acur.rascunho[el.getAttribute("data-acur-rascunho")] = el.value;
       else if (el.hasAttribute("data-acur-edit-texto")) acur.editTexto = el.value;
       else if (el.hasAttribute("data-acur-autor")) { acur.autor = el.value; try { localStorage.setItem("acur-autor", el.value); } catch(e) {} }
-      else if (el.hasAttribute("data-acur-hist-filtro")) acurFiltrarHist(el.value);
+      else if (el.hasAttribute("data-acur-hist-filtro")) {
+        acur.hist.filtro = el.value;
+        clearTimeout(acurFiltroTimer);
+        acurFiltroTimer = setTimeout(acurPintar, 250);
+      }
+    });
+    target.addEventListener("change", function(ev){
+      var el = ev.target, campo = el.getAttribute("data-acur-f");
+      if (!campo) return;
+      acur.hist[campo] = el.value;
+      acurPintar();
     });
   }
 
@@ -3923,12 +4134,13 @@ try {
       var ultimaData = r0.data && r0.data[0] ? r0.data[0].data : null;
       return Promise.all([
         sb.from("acuracidade_itens").select("*"),
-        ultimaData ? sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_comparado,acuracidade,status").eq("data", ultimaData) : Promise.resolve({data:[]}),
+        ultimaData ? sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_comparado,acuracidade,status,verificado_em").eq("data", ultimaData) : Promise.resolve({data:[]}),
         sb.from("acuracidade_execucao").select("*").order("data", {ascending:false}).limit(1),
-        sb.from("acuracidade_observacoes").select("*").order("criado_em", {ascending:false})
+        sb.from("acuracidade_observacoes").select("*").order("criado_em", {ascending:false}),
+        sb.from("acuracidade_ocorrencias").select("*").order("detectada_em", {ascending:false})
       ]).then(function(res){
         for (var i = 0; i < res.length; i++) if (res[i].error) throw new Error(res[i].error.message);
-        acur.cache = {itens:res[0].data || [], ultima:res[1].data || [], ultimaData:ultimaData, execs:res[2].data || [], obs:res[3].data || []};
+        acur.cache = {itens:res[0].data || [], ultima:res[1].data || [], ultimaData:ultimaData, execs:res[2].data || [], obs:res[3].data || [], ocorr:res[4].data || []};
         acurPintar();
       });
     }).catch(function(err){
@@ -3937,18 +4149,23 @@ try {
     }).then(function(){ acurFetching = false; });
   }
 
-  // Checagem nova (07h ou manual) ou lista de itens alterada: recarrega sozinho
-  // quem estiver com a aba aberta — antes só buscava ao abrir a aba, e quem já
-  // estava com ela aberta continuava vendo a lista antiga (visto 26/09).
+  // Checagem nova (07h, rechecagem ou manual), ocorrência aberta/resolvida ou
+  // lista de itens alterada: recarrega sozinho quem estiver com a aba aberta.
   if (!window.__acurDadosRealtime){
     window.__acurDadosRealtime = true;
+    var acurRecarregarTimer = null;
     var acurRecarregar = function(){
       if (!document.getElementById("acuracidade-widget")) return;
-      refreshAcuracidade();
-      if (acur.histAberto) acurCarregarHistorico(); else acur.hist = null;
+      clearTimeout(acurRecarregarTimer);
+      acurRecarregarTimer = setTimeout(function(){
+        refreshAcuracidade();
+        if (acur.hist.checagens) { acur.hist.checagens = null; if (acur.hist.aberto && acur.hist.aba === "checagens") acurCarregarChecagens(); }
+      }, 1500);
     };
     subscribeTable("acuracidade_execucao", acurRecarregar);
     subscribeTable("acuracidade_itens", acurRecarregar);
+    subscribeTable("acuracidade_ocorrencias", acurRecarregar);
+    subscribeTable("acuracidade_diaria", acurRecarregar);
     setInterval(function(){ if (document.getElementById("acuracidade-widget")) refreshAcuracidade(); }, 5*60*1000);
   }
 
@@ -6133,7 +6350,7 @@ try {
       // Google" (link público, quase nunca falha) — assim qualquer pessoa
       // que abra o link já vê os dados reais sem precisar clicar em
       // "Sincronizar" manualmente. Conexões do tipo "API" (ex.: Recebimento,
-      // que depende do servidor do Glog rodando em localhost) ficam de fora
+      // que depende do servidor do GLog rodando em localhost) ficam de fora
       // de propósito — sincronizar sozinho aqui só geraria erro de rede pra
       // quem não tem esse servidor local.
       CONNECTIONS.filter(function(c){ return c.tipo === "sheets"; }).forEach(function(conn){
