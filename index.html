@@ -2970,13 +2970,40 @@ try {
     return soma/ultimas.length;
   }
 
-  // Semáforo do ritmo (pedido do dono, 2026-09-28): verde = dentro do prazo
-  // (ritmo pelo menos TINY_MARGEM_VERDE acima do necessário, ou fila zerada);
-  // amarelo = no limite (entre o necessário e a margem); vermelho = abaixo do
-  // necessário (ou coleta de hoje já passou com pedido na fila). null = sem
-  // horário de coleta configurado para essa forma hoje → cor neutra.
-  var TINY_MARGEM_VERDE = 1.10;
+  // Semáforo do ritmo: null = sem horário de coleta configurado para essa forma hoje → cor neutra.
+  // Semáforo pelo HORÁRIO previsto de término (pedido do dono, 2026-09-28): no
+  // ritmo atual, termina às agora + fila ÷ ritmo. Comparado com o prazo (coleta
+  // da forma de envio, ou fim do expediente no card da operação inteira):
+  // verde = folga de TINY_FOLGA_VERDE_MIN ou mais; amarelo = folga menor;
+  // vermelho = termina depois do prazo. Mesma regra para barras, ritmo e cards.
+  var TINY_FOLGA_VERDE_MIN = 30;
   var TINY_COR_STATUS = { verde:"var(--status-good)", amarelo:"var(--status-warning)", vermelho:"var(--status-critical)" };
+  function tinyFmtDuracao(min){
+    min = Math.round(Math.abs(min));
+    if (min < 60) return min + " min";
+    var h = Math.floor(min/60), m = min % 60;
+    return h + "h" + (m ? String(m).padStart(2,"0") : "");
+  }
+  function tinyHoraTxt(d){ return d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }
+  function tinyPrevisaoFim(pendente, ritmo, prazo, rotuloPrazo){
+    if (pendente <= 0) return { status:"verde", fimTxt:"concluído", detalhe:"fila zerada" };
+    if (!ritmo || ritmo <= 0) return { status:"vermelho", fimTxt:"sem ritmo", detalhe:fmtInt(pendente) + " na fila e ninguém embalando agora" };
+    var fim = new Date(Date.now() + pendente/ritmo*3600000);
+    // Ritmo muito baixo (ex.: hora do almoço) jogaria o fim para outro dia com
+    // "74h atrasado" — nesse caso só diz que não termina hoje e quanto precisa.
+    if (fim.toDateString() !== new Date().toDateString()){
+      var precisa = prazo && prazo.getTime() > Date.now() ? " — precisa de " + fmtDec(pendente/((prazo.getTime()-Date.now())/3600000),1) + "/h até " + tinyHoraTxt(prazo) : "";
+      return { status:"vermelho", fimTxt:"não termina hoje", detalhe:"no ritmo atual (" + fmtDec(ritmo,1) + "/h)" + precisa };
+    }
+    var fimTxt = tinyHoraTxt(fim);
+    if (!prazo) return { status:null, fimTxt:fimTxt, detalhe:"sem horário de " + rotuloPrazo + " configurado" };
+    var folgaMin = (prazo.getTime() - fim.getTime())/60000;
+    var st = folgaMin >= TINY_FOLGA_VERDE_MIN ? "verde" : folgaMin >= 0 ? "amarelo" : "vermelho";
+    var det = folgaMin >= TINY_FOLGA_VERDE_MIN ? tinyFmtDuracao(folgaMin) + " adiantado"
+      : folgaMin >= 0 ? "no limite — " + tinyFmtDuracao(folgaMin) + " de folga"
+      : tinyFmtDuracao(folgaMin) + " atrasado";
+    return { status:st, fimTxt:fimTxt, detalhe:det + " (" + rotuloPrazo + " " + tinyHoraTxt(prazo) + ")" };
+  }
   function tinyStatusRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma){
     if (!tinyHorarios) return null;
     var chaveTiny = TINY_FORMA_NOME_TINY[formaKey];
@@ -2985,12 +3012,12 @@ try {
     var atual = tinyRitmoAtualPorHora((embaladosPorHoraForma||{})[chaveTiny], embalado, primeiroEmbaladoEmIso);
     var alvoColeta = tinyHorarioDeHoje(empresaKey, formaKey, "horario_coleta");
     if (!alvoColeta) return null;
-    if (pendente <= 0) return { status:"verde", atual:atual, necessario:0, texto:"fila zerada" };
-    if (alvoColeta.getTime() <= Date.now()) return { status:"vermelho", atual:atual, necessario:null, texto:"coleta já passou com " + fmtInt(pendente) + " na fila" };
+    var prev = tinyPrevisaoFim(pendente, atual, alvoColeta, "coleta");
+    if (pendente <= 0) return { status:"verde", atual:atual, necessario:0, texto:"fila zerada", previsao:prev };
+    if (alvoColeta.getTime() <= Date.now()) return { status:"vermelho", atual:atual, necessario:null, texto:"coleta já passou com " + fmtInt(pendente) + " na fila", previsao:prev };
     var horasRestantes = Math.max(1, Math.ceil((alvoColeta.getTime()-Date.now())/3600000));
     var necessario = pendente/horasRestantes;
-    var st = atual >= necessario*TINY_MARGEM_VERDE ? "verde" : atual >= necessario ? "amarelo" : "vermelho";
-    return { status:st, atual:atual, necessario:necessario, texto:fmtDec(atual,1) + "/h · precisa " + fmtDec(necessario,1) + "/h" };
+    return { status:prev.status, atual:atual, necessario:necessario, texto:fmtDec(atual,1) + "/h · precisa " + fmtDec(necessario,1) + "/h · " + (/^(não|sem)/.test(prev.fimTxt) ? prev.fimTxt : "termina " + prev.fimTxt), previsao:prev };
   }
   // Nome da forma como aparece nos gráficos mesclados → empresa/forma do ritmo.
   var TINY_FORMA_GRAFICO = {
@@ -3035,7 +3062,14 @@ try {
       necessarioTxt = fmtDec(necessarioNum,1) + " /h";
     }
     var stRitmo = tinyStatusRitmo(empresaKey, formaKey, embaladoPorForma, pendentePorForma, primeiroEmbaladoEmIso, embaladosPorHoraForma);
-    var cor = stRitmo ? TINY_COR_STATUS[stRitmo.status] : "var(--ink)";
+    var cor = stRitmo && stRitmo.status ? TINY_COR_STATUS[stRitmo.status] : "var(--ink)";
+    var prevFim = tinyPrevisaoFim(pendente, atual, alvoColeta, "coleta");
+    var corFim = prevFim.status ? TINY_COR_STATUS[prevFim.status] : "var(--ink)";
+    var blocoFim = tinyHorarios
+      ? '<div style="margin-top:6px;"><div style="font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Termina às (no ritmo atual)</div>' +
+          '<div class="mono" style="font-size:.95rem; font-weight:700; color:' + corFim + ';">' + escHtml(prevFim.fimTxt) + '</div>' +
+          '<div style="font-size:.68rem; font-weight:700; color:' + corFim + ';">' + escHtml(prevFim.detalhe) + '</div></div>'
+      : '';
     return '<div style="flex:1 1 150px; min-width:140px;">' +
       '<div style="font-size:.68rem; font-weight:700; color:var(--ink-2); margin-bottom:3px;">' + TINY_FORMA_NOME_EXIBICAO[formaKey] + '</div>' +
       '<div style="display:flex; gap:14px; flex-wrap:wrap;">' +
@@ -3044,6 +3078,7 @@ try {
         '<div><div style="font-size:.6rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3);">Necessário</div>' +
           '<div class="mono" style="font-size:.95rem; font-weight:700;">' + necessarioTxt + '</div></div>' +
       '</div>' +
+      blocoFim +
     '</div>';
   }
 
@@ -3186,8 +3221,55 @@ try {
     {empresa:"EDN", forma:"mercado_livre", chave:"edn-ml", label:"Ampec SC EDN — Mercado Livre"},
   ];
 
+  // Fim da operação inteira: fila total (todas as formas, PR + EDN) ÷ ritmo da
+  // equipe (embalados por hora somados, média das últimas horas cheias — mesmo
+  // método do card de ritmo). Prazo = maior "fim do dia" configurado hoje em
+  // Fontes de Dados; sem ele, a última coleta.
+  function tinyPrevisaoOperacaoCard(d){
+    var porHora = {};
+    [d.embaladosPorHoraPR || {}, d.embaladosPorHoraEDN || {}].forEach(function(m){
+      Object.keys(m).forEach(function(h){ porHora[h] = (porHora[h] || 0) + (m[h] || 0); });
+    });
+    var primeiros = [d.primeiroEmbaladoEmPR, d.primeiroEmbaladoEmEDN].filter(Boolean).sort();
+    var ritmo = tinyRitmoAtualPorHora(porHora, d.embaladoTotal || 0, primeiros[0] || null);
+    var prazo = null, rotulo = "fim do expediente";
+    if (tinyHorarios){
+      Object.keys(TINY_EMPRESA_FORMAS).forEach(function(emp){
+        TINY_EMPRESA_FORMAS[emp].forEach(function(f){
+          var fd = tinyHorarioDeHoje(emp, f, "horario_fim_dia");
+          if (fd && (!prazo || fd > prazo)) prazo = fd;
+        });
+      });
+      if (!prazo){
+        rotulo = "última coleta";
+        Object.keys(TINY_EMPRESA_FORMAS).forEach(function(emp){
+          TINY_EMPRESA_FORMAS[emp].forEach(function(f){
+            var c = tinyHorarioDeHoje(emp, f, "horario_coleta");
+            if (c && (!prazo || c > prazo)) prazo = c;
+          });
+        });
+      }
+    }
+    var prev = tinyHorarios ? tinyPrevisaoFim(d.pendenteTotal || 0, ritmo, prazo, rotulo) : { status:null, fimTxt:"…", detalhe:"Carregando horários…" };
+    var cor = prev.status ? TINY_COR_STATUS[prev.status] : "var(--ink)";
+    var linha = function(rot, val){ return '<div style="font-size:.78rem; color:var(--ink-2);">• ' + rot + ' = <strong>' + val + '</strong></div>'; };
+    return '<div class="card">' +
+      '<div class="card-head"><div class="card-title">Previsão de fim da operação</div><div class="desc">Todos os pedidos da fila (Ampec PR + Ampec SC, todas as plataformas) no ritmo atual da equipe.</div></div>' +
+      '<div style="display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end; margin-top:2px;">' +
+        '<div><div style="font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3);">Termina às</div>' +
+          '<div class="mono" style="font-size:1.5rem; font-weight:700; color:' + cor + ';">' + escHtml(prev.fimTxt) + '</div>' +
+          '<div style="font-size:.75rem; font-weight:700; color:' + cor + ';">' + escHtml(prev.detalhe) + '</div></div>' +
+        '<div>' +
+          linha("Fila total", fmtInt(d.pendenteTotal || 0) + " pedidos") +
+          linha("Ritmo da equipe", fmtDec(ritmo, 1) + " /h") +
+          linha(rotulo.charAt(0).toUpperCase() + rotulo.slice(1), prazo ? tinyHoraTxt(prazo) : "—") +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
   function tinyCronometroCard(){
-    return '<div class="card" style="margin-top:16px;">' +
+    return '<div class="card">' +
       '<div class="card-head"><div class="card-title">Cronômetro da coleta de hoje</div><div class="desc">Conta só dentro do dia — quando bater o horário da coleta, trava em zero e avisa se ainda falta pedido.</div></div>' +
       '<div style="display:flex; gap:28px; flex-wrap:wrap; margin-top:2px;">' +
         TINY_CRONOMETRO_ALVOS.map(function(a){
@@ -3400,7 +3482,9 @@ try {
     var semDadosMsg = '<p style="color:var(--ink-3); font-size:.85rem;">Ainda sem dados suficientes — precisa de pelo menos 2 consultas (uns 5min) pra calcular a diferença.</p>';
 
     return '' +
-      tinyCronometroCard() +
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
+        tinyCronometroCard() + tinyPrevisaoOperacaoCard(d) +
+      '</div>' +
       '<div class="kpi-grid" style="margin-top:16px;">' + kpis.join("") + '</div>' +
       '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px;">' +
         tinyRitmoCard("PR","Ampec PR", d.embaladoPorFormaEnvioPR, d.pendentePorFormaEnvioPR, d.primeiroEmbaladoEmPR, d.embaladosPorHoraFormaPR) +
