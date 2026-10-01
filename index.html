@@ -309,6 +309,11 @@ tr:last-child td{border-bottom:none;}
 .sector-card.erro-cat-card:hover{border-color:var(--accent);}
 .sector-card.erro-cat-card .mini-kpis .l{color:rgba(255,255,255,.65);}
 .sector-card.erro-cat-card.open{background:linear-gradient(155deg, #8F1D21, #400001); border-color:#8F1D21;}
+/* Cards de Ferramentas — mesmo truque do .sector-card (flex via classe, não
+   inline), senão um style="display:flex" inline vence o [hidden] da busca
+   (data-sku-filter) e o card nunca some ao filtrar. */
+.ferramenta-card{display:flex; flex-direction:column; gap:10px; width:100%; text-align:left; cursor:pointer;}
+.ferramenta-card[hidden]{display:none;}
 .chip{
   font-size:.65rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
   padding:3px 8px; border-radius:99px;
@@ -1252,7 +1257,8 @@ try {
     mipDraft:null, mipDraftKey:null, mipError:null, mipBusy:false, mipExpanded:null,
     fullEmpresaDraft:null, fullEmpresaError:null,
     erroFiltroResponsavel:"todos", erroCategoriaExpandida:null,
-    usuarioDraft:null, usuarioError:null
+    usuarioDraft:null, usuarioError:null,
+    ferramentaAberta:null
   };
 
   function empresaColor(id){ return "var(--c-" + id + ")"; }
@@ -2179,6 +2185,7 @@ try {
     ];
     var rootItemsBottom = [
       {id:"insumos", ic:"◇", label:"Insumos"},
+      {id:"ferramentas", ic:"▦", label:"Ferramentas"},
       {id:"fontes", ic:"⇄", label:"Fontes de Dados"},
       {id:"configuracoes", ic:"⚙", label:"Configurações"}
     ];
@@ -5634,6 +5641,56 @@ try {
     }
   }
 
+  /* ============================ PAGE: FERRAMENTAS ============================ */
+  // Apps internos embutidos no GLog, rodando via iframe. Pra adicionar um
+  // app novo: colocar o HTML dele em glog-prototype/ferramentas/<id>.html
+  // (publicar junto com o index.html, mesmo processo de sempre) e
+  // acrescentar uma entrada aqui — a listagem e a busca pegam sozinhas.
+  var FERRAMENTAS = [
+    {
+      id: "etiquetas-qr",
+      nome: "Etiquetas QR Ampec",
+      descricao: "Lê um PDF de etiquetas com código de barras e gera etiquetas com QR code (endereço ou movimentador), prontas pra imprimir.",
+      palavrasChave: ["qr","qr code","etiqueta","etiquetas","codigo de barras","código de barras","barcode","endereco","endereço","movimentador","pdf","inbound"],
+      icone: "🏷️",
+      cor: "var(--accent)",
+      arquivo: "ferramentas/etiquetas-qr.html"
+    }
+  ];
+
+  function ferramentaCard(f){
+    var hay = (f.nome + " " + f.descricao + " " + f.palavrasChave.join(" ")).toLowerCase();
+    return '<button type="button" class="card ferramenta-card" data-sku-row="' + escAttr(hay) + '" data-ferramenta-open="' + f.id + '">' +
+      '<div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; background:color-mix(in oklab, ' + f.cor + ' 16%, var(--surface-2));">' + f.icone + '</div>' +
+      '<div><div style="font-weight:700;">' + escHtml(f.nome) + '</div><div style="margin-top:4px; font-size:.82rem; color:var(--ink-3);">' + escHtml(f.descricao) + '</div></div>' +
+    '</button>';
+  }
+
+  function pageFerramentas(){
+    var aberto = state.ferramentaAberta ? FERRAMENTAS.filter(function(f){ return f.id === state.ferramentaAberta; })[0] : null;
+
+    if (aberto){
+      return '' +
+      '<div class="topbar"><div><h1>Ferramentas · ' + escHtml(aberto.nome) + '</h1><p>' + escHtml(aberto.descricao) + '</p></div>' +
+        '<div class="filters"><button class="btn-ghost" data-ferramenta-fechar>← Voltar</button></div>' +
+      '</div>' +
+      '<div class="content"><section class="sector">' +
+        '<iframe src="' + escAttr(aberto.arquivo) + '" title="' + escAttr(aberto.nome) + '" style="width:100%; height:calc(100vh - 160px); border:0; border-radius:12px; background:#fff;"></iframe>' +
+      '</section></div>';
+    }
+
+    return '' +
+    '<div class="topbar"><div><h1>Ferramentas</h1><p>Apps internos do GLog — busque por nome ou palavra-chave e clique para abrir.</p></div></div>' +
+    '<div class="content">' +
+      '<section class="sector">' +
+        '<div class="card-head" style="margin-bottom:4px;">' + skuSearchBox("ferramentas-grid", "Buscar por nome ou palavra-chave…") + '</div>' +
+        '<div id="ferramentas-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:14px;">' +
+          FERRAMENTAS.map(ferramentaCard).join("") +
+        '</div>' +
+      '</section>' +
+    '</div>';
+  }
+
   /* ============================ RENDER / INTERACTIONS ============================ */
 
   function render(){
@@ -5646,6 +5703,7 @@ try {
     else if (state.page === "fulfillment") pageHtml = pageFulfillment();
     else if (state.page === "ajuda") pageHtml = pageAjuda();
     else if (state.page === "insumos") pageHtml = pageInsumos();
+    else if (state.page === "ferramentas") pageHtml = pageFerramentas();
     else if (state.page === "configuracoes") pageHtml = pageConfiguracoes();
     else pageHtml = pageFontes();
     root.innerHTML = '<div class="app">' + sidebarHtml() + '<div class="main">' + pageHtml + '</div></div>';
@@ -5766,6 +5824,19 @@ try {
         state.page = el.getAttribute("data-nav");
         render();
       });
+    });
+
+    /* ---- Ferramentas: abrir/fechar um app embutido ---- */
+    root.querySelectorAll("[data-ferramenta-open]").forEach(function(el){
+      el.addEventListener("click", function(){
+        state.ferramentaAberta = el.getAttribute("data-ferramenta-open");
+        render();
+      });
+    });
+    var ferramentaFecharBtn = root.querySelector("[data-ferramenta-fechar]");
+    if (ferramentaFecharBtn) ferramentaFecharBtn.addEventListener("click", function(){
+      state.ferramentaAberta = null;
+      render();
     });
 
     /* ---- Nav: grupos Inbound/Outbound com subcategorias suspensas ---- */
