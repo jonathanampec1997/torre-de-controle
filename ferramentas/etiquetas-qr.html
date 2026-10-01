@@ -1,0 +1,509 @@
+<title>Etiquetas QR Ampec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --bg:#F4F2F2; --panel:#FEFEFE; --ink:#00121E; --muted:#56606A; --line:#D7D4D4;
+  --accent:#400001; --accent-ink:#FEFEFE; --head:#00121E; --head-ink:#FEFEFE;
+  --ok:#2E6B47; --ok-bg:#E4EFE8; --err:#8F1D21; --err-bg:#F6E6E6;
+  --stock:#FFFFFF; --stock-edge:#C9C5C5; --focus:#8F1D21;
+  --sans:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cond:"Manrope",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#00121E; --panel:#0A2130; --ink:#FEFEFE; --muted:#A9B3BA; --line:#1F3647;
+    --accent:#8F1D21; --accent-ink:#FEFEFE; --head:#051A28; --head-ink:#D7D4D4;
+    --ok:#7FC79C; --ok-bg:#12301F; --err:#F0A3A5; --err-bg:#3A1416;
+    --stock:#FFFFFF; --stock-edge:#1F3647; --focus:#D7D4D4; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#00121E; --panel:#0A2130; --ink:#FEFEFE; --muted:#A9B3BA; --line:#1F3647;
+  --accent:#8F1D21; --accent-ink:#FEFEFE; --head:#051A28; --head-ink:#D7D4D4;
+  --ok:#7FC79C; --ok-bg:#12301F; --err:#F0A3A5; --err-bg:#3A1416;
+  --stock:#FFFFFF; --stock-edge:#1F3647; --focus:#D7D4D4; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;margin:0;padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:18px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--cond);font-weight:800;font-size:26px;letter-spacing:.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0;max-width:62ch}
+.pill{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted);background:var(--panel)}
+.grid{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:18px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:14px}
+.panel h2{font-family:var(--cond);font-weight:600;font-size:15px;letter-spacing:.06em;text-transform:uppercase;margin:0;color:var(--muted)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.tabs button{font:600 14px var(--sans);padding:9px 8px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--head);color:var(--head-ink)}
+.drop{border:1.5px dashed var(--stock-edge);border-radius:8px;padding:14px;text-align:center;color:var(--muted);cursor:pointer;display:grid;gap:4px}
+.drop.over{border-color:var(--accent);color:var(--ink)}
+.drop strong{color:var(--ink);font-weight:600}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.field{display:grid;gap:4px}
+.field.full{grid-column:1/-1}
+label{font-size:12px;color:var(--muted);font-weight:500}
+input[type=number],input[type=text]{width:100%;font:500 14px var(--mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 8px}
+input:disabled{opacity:.5}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink)}
+.check input{accent-color:var(--accent);width:16px;height:16px}
+fieldset{border:0;padding:0;margin:0;display:grid;gap:10px}
+legend{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink);margin-bottom:8px;padding:0}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.btn{font:600 14px var(--sans);border-radius:7px;padding:9px 14px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,.drop:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.status{font-size:13px;border-radius:7px;padding:9px 11px;background:var(--bg);border:1px solid var(--line)}
+.status.ok{background:var(--ok-bg);border-color:transparent;color:var(--ok)}
+.status.err{background:var(--err-bg);border-color:transparent;color:var(--err)}
+.stage{display:grid;place-items:center;padding:22px 12px;background:repeating-linear-gradient(135deg,transparent 0 9px,color-mix(in srgb,var(--line) 45%,transparent) 9px 10px);border-radius:8px}
+.stage canvas{max-width:100%;height:auto;background:var(--stock);border:1px solid var(--stock-edge);border-radius:3px;box-shadow:0 1px 0 var(--stock-edge)}
+.nav{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.nav .who{font-family:var(--mono);font-size:13px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:700;color:var(--head-ink);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:var(--head);position:sticky;top:0}
+td.code{font-family:var(--mono);font-weight:600}
+tr:last-child td{border-bottom:0}
+tr[data-sel="1"] td{background:color-mix(in srgb,var(--ink) 7%,transparent)}
+tbody tr{cursor:pointer}
+.tag{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px}
+.tag.ok{background:var(--ok-bg);color:var(--ok)}
+.tag.err{background:var(--err-bg);color:var(--err)}
+.tag.wait{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.scroll{max-height:320px;overflow:auto}
+.note{font-size:12px;color:var(--muted);border-left:2px solid var(--accent);padding:2px 0 2px 10px;margin:0}
+.mono{font-family:var(--mono)}
+@media (prefers-reduced-motion:no-preference){.btn{transition:filter .15s}.btn:hover:not(:disabled){filter:brightness(1.06)}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Etiquetas QR Ampec</h1>
+      <p class="sub">Lê as etiquetas com código de barras de um PDF e gera etiquetas com QR code. O QR guarda exatamente o código das barras — nada é acrescentado.</p>
+    </div>
+    <span class="pill" id="pill">Carregando leitores…</span>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-label="Configuração">
+      <div class="tabs" role="tablist" aria-label="Padrão da etiqueta">
+        <button role="tab" id="tab-endereco" aria-selected="true" data-mode="endereco">Endereço</button>
+        <button role="tab" id="tab-movimentador" aria-selected="false" data-mode="movimentador">Movimentador</button>
+      </div>
+
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Escolher PDF de etiquetas">
+        <strong>Solte o PDF aqui ou clique para escolher</strong>
+        <span id="fileName">Exemplo carregado: etiqueta BL2 - RUA9 - AD7</span>
+      </div>
+      <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+
+      <fieldset>
+        <legend>Etiqueta (mm)</legend>
+        <div class="fields">
+          <div class="field"><label for="pageW">Largura</label><input type="number" id="pageW" step="0.1" min="10"></div>
+          <div class="field"><label for="pageH">Altura</label><input type="number" id="pageH" step="0.1" min="10"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>QR code (mm)</legend>
+        <div class="fields">
+          <div class="field"><label for="qrW">Largura</label><input type="number" id="qrW" step="0.1" min="5"></div>
+          <div class="field"><label for="qrH">Altura</label><input type="number" id="qrH" step="0.1" min="5"></div>
+          <div class="field"><label for="qrTop">Margem de cima</label><input type="number" id="qrTop" step="0.1" min="0"></div>
+          <div class="field" style="align-self:end"><label class="check"><input type="checkbox" id="qrSquare"> Manter quadrado</label></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Texto embaixo do QR (mm)</legend>
+        <div class="fields">
+          <div class="field"><label for="txtW">Largura</label><input type="number" id="txtW" step="0.1" min="2"></div>
+          <div class="field"><label for="txtH">Altura da letra</label><input type="number" id="txtH" step="0.1" min="0.5"></div>
+          <div class="field"><label for="txtGap">Distância do QR</label><input type="number" id="txtGap" step="0.1" min="0"></div>
+          <div class="field" style="align-self:end;display:grid;gap:6px">
+            <label class="check"><input type="checkbox" id="txtSameW"> Largura igual à do QR</label>
+            <label class="check"><input type="checkbox" id="txtAutoH"> Altura proporcional</label>
+          </div>
+          <div class="field full"><label for="tpl">Conteúdo do texto</label><input type="text" id="tpl" spellcheck="false"></div>
+        </div>
+        <p class="hint" id="tplHint"></p>
+      </fieldset>
+
+      <div class="row">
+        <button class="btn" id="saveCfg">Salvar configuração</button>
+        <button class="btn" id="resetCfg">Restaurar padrão</button>
+      </div>
+      <div class="status" id="cfgStatus" hidden></div>
+    </section>
+
+    <section class="panel" aria-label="Etiquetas">
+      <div class="nav">
+        <h2>Pré-visualização</h2>
+        <div class="row">
+          <button class="btn" id="prev" aria-label="Etiqueta anterior">‹</button>
+          <span class="who" id="who">—</span>
+          <button class="btn" id="next" aria-label="Próxima etiqueta">›</button>
+        </div>
+      </div>
+      <div class="stage"><canvas id="preview" width="800" height="300" aria-label="Pré-visualização da etiqueta"></canvas></div>
+
+      <div class="status" id="readStatus">Lendo o exemplo…</div>
+
+      <div class="tablewrap scroll">
+        <table>
+          <thead><tr><th>#</th><th>Código (QR)</th><th>Texto</th><th>Pág.</th><th>Situação</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <div class="row">
+        <button class="btn primary" id="download" disabled>Conferir e baixar PDF</button>
+      </div>
+      <div class="status" id="dlStatus" hidden></div>
+      <p class="note">O QR code é estático: o código fica gravado nos próprios quadradinhos, sem link nem servidor. Ele não expira — só deixa de ler se a etiqueta física estragar.</p>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+"use strict";
+const SAMPLE_B64 = "JVBERi0xLjQKJfbk/N8KMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovVmVyc2lvbiAvMS40Ci9QYWdlcyAyIDAgUgo+PgplbmRvYmoKMyAwIG9iago8PAovQXV0aG9yIChsYWJlbGFyeS5jb20pCi9DcmVhdG9yIChMYWJlbGFyeSAzLjQuMC1kOGNkM2IxZCkKL1Byb2R1Y2VyIChMYWJlbGFyeSAzLjQuMC1kOGNkM2IxZCkKL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MDkyNDE5NDYzNCswMCcwMCcpCj4+CmVuZG9iagoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbNCAwIFJdCi9Db3VudCAxCi9SZXNvdXJjZXMgPDwKL0V4dEdTdGF0ZSA1IDAgUgovWE9iamVjdCA8PAovRm9ybTEgNiAwIFIKPj4KPj4KPj4KZW5kb2JqCjQgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL01lZGlhQm94IFswLjAgMC4wIDIyNS45MzEwMyA4NC43Njg0N10KL0dyb3VwIDcgMCBSCi9QYXJlbnQgMiAwIFIKL0NvbnRlbnRzIDggMCBSCj4+CmVuZG9iago1IDAgb2JqCjw8Ci9nczEgOSAwIFIKPj4KZW5kb2JqCjYgMCBvYmoKPDwKL0xlbmd0aCA1MzQKL1R5cGUgL1hPYmplY3QKL1N1YnR5cGUgL0Zvcm0KL0JCb3ggWzAuMCAwLjAgMjI1LjkzMTAzIDg0Ljc2ODQ3XQovUmVzb3VyY2VzIDw8Ci9Gb250IDEwIDAgUgovRXh0R1N0YXRlIDExIDAgUgo+PgovRmlsdGVyIC9GbGF0ZURlY29kZQo+PgpzdHJlYW0NCnicjVZNbxNBDF2uey4SQhzm0Aq4OP4cz1wrPs5F+w+iUEDtoUTiwK/HQ5RtKWll7SGRY7/1PHvey92MBQuzQRcqTcFrs/JzN28+7H593+6+fL4s2/1MZTz77fx1btAZuUiNit4LAzJ5UQY141E5APGQSwxELGsyQjevTyUbCKrmkhmhstZcG6zQGrY1WQCbPZncgaT2XBvCINwpmWxgTJxrQxGakuYOqAooYknkBty655CNQBslqTMDF09SZ7FIksOtCmzZnasOqpwkzglqb0ni3AGpee54HmukNUlcE1BMXpMWWySUO16PJbIHG/cscGfonh1Jd2AxS8oAMphZcuUIHZpbco2IEBAlnR2rVDF5YYlil4zTYsfgzkkBoyG5VbMMCsWlVc8Nh4bSKGY5EYf6QPCebeRymTefwgtCfhW1LGNcWJbf4RAjJywEWvXCEkYSgrTc3he/m84nm87el+XH/HFZkeI1JO1JJCLw4Qr/Il1Mm+nli4vAa4H6Jr6dT2+n10dsHvZAofheD5+396EQqTqYvJkp7E6HbJ4IHQtv5m8RFAhHiGAQ5doDbQ2Zhg/hKGWmw68nQsfCgfY/mTxmi6cooLjsbSxgDRZI5RELMp1Nr45nJkPwzn9nI9LipXH5uYdFhq9Wqo8GeTdvrvdUrvdrF2GSHEtyoosaWtbCxoNCpphJdLH+IRhTXXu4iucPPA2pjw0KZW5kc3RyZWFtCmVuZG9iago3IDAgb2JqCjw8Ci9TIC9UcmFuc3BhcmVuY3kKL0NTIC9EZXZpY2VSR0IKPj4KZW5kb2JqCjggMCBvYmoKPDwKL0xlbmd0aCA1OAovRmlsdGVyIC9GbGF0ZURlY29kZQo+PgpzdHJlYW0NCnicK+QyVDAAQgiZnMsFooyMTPUsjQ0NjBUsTPTMzSxMzBWKUrnCufK49N3yi3INFVzyuQK5AFvwDG8NCmVuZHN0cmVhbQplbmRvYmoKOSAwIG9iago8PAovVHlwZSAvRXh0R1N0YXRlCi9CTSAvRGlmZmVyZW5jZQo+PgplbmRvYmoKMTAgMCBvYmoKPDwKL0YxIDEyIDAgUgo+PgplbmRvYmoKMTEgMCBvYmoKPDwKL2dzMSA5IDAgUgo+PgplbmRvYmoKMTIgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL0Jhc2VGb250IC9BQUFXRkMrRm9udDEKL1N1YnR5cGUgL1R5cGUwCi9FbmNvZGluZyAvSWRlbnRpdHktSAovRGVzY2VuZGFudEZvbnRzIFsxMyAwIFJdCi9Ub1VuaWNvZGUgMTQgMCBSCj4+CmVuZG9iagoxMyAwIG9iago8PAovVHlwZSAvRm9udAovU3VidHlwZSAvQ0lERm9udFR5cGUyCi9CYXNlRm9udCAvQUFBV0ZDK0ZvbnQxCi9DSURTeXN0ZW1JbmZvIDE1IDAgUgovRm9udERlc2NyaXB0b3IgMTYgMCBSCi9XIFswIFs0OTldCiAyMCBbNDc5IDQ3OV0KIDI0IFs0NzldCiAyNiBbNDc5XQogMjggWzQ3OV0KMzYgWzU1MyA1NTNdCiAzOSBbNTkwXQogNDcgWzQ3OV0KIDUxIFs1NTNdCiA1MyBbNTkwXQo1NiBbNjA4XQogMjkzIFs5MDNdCl0KL0NJRFRvR0lETWFwIDE3IDAgUgo+PgplbmRvYmoKMTQgMCBvYmoKPDwKL0xlbmd0aCAyOTkKL0ZpbHRlciAvRmxhdGVEZWNvZGUKPj4Kc3RyZWFtDQp4nF2Sz2qEMBDG73mKHLeHRY3KtiDC4rLgoX+o7QNoMkpgjSHGg2/fOON6aEA+8st84/jFqKpvtdGeR19ukg143mujHMzT4iTwDgZtWCK40tLvO4Yix9ayKLibdfYw1qafWFHw6Dsczt6t/HRVUwcvLPp0Cpw2Az/9Vk3YN4u1DxjBeB6zsuQKehY6vbf2ox2BR+g71yoUaL+egwlLsOJntcAFWRKaR04KZttKcK0ZgBVxWCUv7mGVDIz6d86S3df1hyHJgiFIjpImJcJXgiRpTvBKkCS9EKwIkqRvCAX1FNQzo57iQpAkywjeCZJkFcI0pWYkeUwwf86CUBDcByTJcc6EXrtLLG6YxPOLMZXt+o7M5eJciBsvGXPeEtYGjv/ATnZz4fMHdYGa1Q0KZW5kc3RyZWFtCmVuZG9iagoxNSAwIG9iago8PAovUmVnaXN0cnkgKEFkb2JlKQovT3JkZXJpbmcgKElkZW50aXR5KQovU3VwcGxlbWVudCAwCj4+CmVuZG9iagoxNiAwIG9iago8PAovVHlwZSAvRm9udERlc2NyaXB0b3IKL0ZvbnROYW1lIC9BQUFXRkMrRm9udDEKL0ZsYWdzIDQKL0ZvbnRXZWlnaHQgNzAwLjAKL0l0YWxpY0FuZ2xlIDAuMAovRm9udEJCb3ggWy0xNzQuMzE2NCAtMjQ2LjU4MjAzIDEyMjkuOTgwNSAxMDEzLjE4MzZdCi9Bc2NlbnQgMTAxMy4xODM2Ci9EZXNjZW50IC0yNDYuNTgyMDMKL0NhcEhlaWdodCA3OTEuMDE1NgovWEhlaWdodCA2MDIuNTM5MDYKL1N0ZW1WIDE4Mi41NTg2Ci9Gb250RmlsZTIgMTggMCBSCi9DSURTZXQgMTkgMCBSCj4+CmVuZG9iagoxNyAwIG9iago8PAovTGVuZ3RoIDQ4Ci9GaWx0ZXIgL0ZsYXRlRGVjb2RlCj4+CnN0cmVhbQ0KeJxjYCASMDIwgWlmIGYBYlY0eTYGdiDJgSbKCaW5gJgbzOIh1sJRMMQALwCbAQBcDQplbmRzdHJlYW0KZW5kb2JqCjE4IDAgb2JqCjw8Ci9MZW5ndGggNDI3OQovRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoMSA3MjIwCj4+CnN0cmVhbQ0KeJzVWHl8VNW9//3uMltmn8k2N8nMMJmhmRmykhDIwiQk+BBaAwmYiEJiIEwokVGRrQqpW9sIiKJSt7avLrXa4mjxGVyTGqzWh+KrK/oEWx/Wlmp8yqsaMunv/maysLxP/31vZu73nvO9v3vO+a333AEEAD30ggjWzo0bPK++9PIAMfcACPau2Jqefcsz1lA7DiDftmbdlq5365/bDqBrADCdiK7uWPXJgu2vAWQU0z0VUSKsu7Vu6kepnx/t2bC55nVpOfV3UL9y3frODoAojZUxRP3qno7NMeNS8ecAmdQFT+yK1bHGaz8pp76H5rPp4CsYG6PWiHwisVPaMrp77E/SsHaHoNMYxqSEX5OdOCDvEWW5VXOFvEa+Snwz8bB8vVSTuEcoF31yjnRHYn1Cm3hJ88zYOuFyXCatFQK4AV2wGsphr6CDNngFBuEb+Bw64FFxBRwTe4gZRgt8JjSgHmohjhlQBSNwH4zCr+AhOCpk4vtYQCP0ogn+jo8KzXAMs+FZGuckhmBMLJHugDvgdxCFD8m0++Axuu8dOIyr8RoMYBCL4B104LPQjwewRngaAtCG5+GN2AKn8BYYEzrgcbgEus2vYiUugyO0FhsMwSb8GkawguYwYiN8igZ4H57H6fAl/gWeQhE+gpfgkPA/8DLExLvgDZSgBeaLV8O/wEK4i+5/EfrJy0vgLfgDrekAfAgXwI8QMI1s0EXa7YK7SasbhHdgFJ9DGcvgQfgl/ASehh/Ab0VZ04k/gy+Ej2ncz0g7LU6jOS+CZbAXmul8KxqFXfL1wi6aZ7uwnXS4key1XR6huOo1vyo+ic3iF7AYvyatCsjTi/Fass99cD4chjzhXtgAg3hIfp76ebCIRryE7HKN8LLwsuZbQgc+Cu/BNvg+FkMQIDIGPh9kAH8W0OGjX4ZK+IgfR/6kGr4U5WNR7o1LJq9Mp+//jZNvfHnJlfmmfsa7EavPN6mFuv44hOOCn34LVsUji1ut1YrX2zYjjuGF/WDqjHsWt8aHOlYt7OyXYHHrAbphKHYAcKw6Fh9ytymqqDAp2o+WqbJoUWUTn8eITwmL4YXx5uSwnry4J5coafL+WHJyOaxOdIwn8sTixzzuOIZmxDXh0+dP0Vqmh5m2xuLDKVrH9D6ml8Ti+1K0XqXRxQs7TgtzpXgDix9lcW8sfjRFp52bNjK9n+lFsfj+FG3iwSUe/BQNLqV4M4tHWfzHsXg0RVtYPJvFPybxbOIF4q3hM4yX4m3MB5g/Qnwgxdt5+A95eHcs/mGKdpxDVZV3nq2TSqefm85g+jjTrlj8eIrOPNsZKp11tqYqnR0+fxU7HfLioDrdFfb0efqIhMZ4L/m+fXFrXxwccfDN9ZV5rLY4OigW1GBQJiKG7rASH0fn+Z44R5jwFTQodNJBQ9uqvkZ1yA6ap6nVS+NO6Sk+b5t6xCM3xYVG9d7VbT5PX3ROkZIc0Gf19J2ytc3ohxw1GvVNrY8h7mrrx7Eb+qEh9wCVP3HlCrqcG/Z4Grsb4thOnbwwEUEvtdxhz/y46J+/pNXXps67YFWfZ74nStNLfj7ThdV9bUW07ubWbsIWWmKkTZlorm5rm0PjeNRxJB6nr41GWJsaYS2PQAOMkpA3vNATFwNNrWTP3gYlHmmg3PJ6GuMDTa3xgQbKM1WRaRMrpfM13VmpNftozdOC1MhPjtLcGo8ocWjr60v2fN54b1+f0kd6pPr9MHAGgXAmEUkR/cAjiv7Gfuxt4ku9Pq+iEj6v6gRvWwPN7Q8vbG5tbOBsB4GqNoiPS1tpF6GF6RGbRpDHRHpEiEBnkMagyP2f7jfch0rAMbes2FHkPlR0qLjM5rWh1+ZdJHaN3oVdibukrSM3IghbAen5AcJx+QQY4KpIrV6n1YBhmUZWRINBBy06jSIajWk6HVjSDOpFlLWoBZpPhqV6UES9HmUZ5SRDU851znYUhZwHi0KhVMfqrLbStxiLQnkvFlmH6Eoeo5X5EkdZ6ayKWeoKvTca729vLxpMfJw4IP11TtWOb5xSISUIQg3pvENjhHp4JrJubi1G6lx1EczNc+XlRiIF0FLgVET0uF1uD7R4chWxoKDe48F6cAHU17pq6+vnNTSAZV59XaQW/HUX1s1VxDqsg+SqMY9uzKMLeXl+aPZnKaLsR/8ZGqmLPlhkHRy0DqiK2ZOkzT579rhuQ0XWF4sGQwMhahxkJQdCSVWpof6qS8pmls8sr5h12rd85vSAb5pWk4sl3pLymbMqykozM9KdWo36taBGO/lN96Z7awR3TmVGhjPD7b6gaXm2a5q3ftE0b+Lj7rWHf7+ux5SW6flWeNbNOZnZmVnpxjRBkCTBcOoFSa9kXBVbsyLf41LyPUuXdlbXLF5UWtow7yb/ee9t/d769U/MrZ1VUldVW3mLkuN2u31ZOaI2zWQ5SbZvGTsmPkTxEYT/juzKzGjxppGtBXTR4Ux3pTu9Xie0BAUig2TvoNNpDwbBbnPZwO5wOcCe5coCe4Yrw24PhcOWEOnmQCRJRNXaWkVUjZ20dqYDbXaX3ZaVlWOz5UBzjkURczBn4ipc6Egn7zjQcQ7vDE66hV3FdrfPPp0dCI3HYspdqsMGky47w19qgJY4vCXpzswMNURTjvI5yAslYkXSUblo1Wp806YHarAFs/PzG1q83oD/orWeMZ/wx9Fv9NUzZ9b8uuPSK6947Y2uLvxzxeaamqXLdv900aKNYvHJxOtBq3XTpk/zE89v2byu58sqjnVC8U6ytwn6It+WJdr9u0yAOr1LjzrJJelIRqN1aTU6ncZiMWs0YDFTXuolk/ZCLaXtRHrSptkFegllE7XOSM/BwYHQhO2mBjEnaNIWdFaNQ6BGrt1hd5R4y73pGlGwfWG//PJ7R58UV/Rt2ogZ2I4d6Dn53kf0ChBLfEnlBOZTzNxG+ZoPFbAzsrgFUGkxKIpYWGgAMOTaocXuV0S7fVZlpWVWKho80Oyh9XuokVyuwWCGZnOBIpovguaMMnJ8Br0inOX4E0mnnennCR+rxImhZOEJkUNT7qxRU0v1nM2adKVtwpfljnEZIZWc7Zidm1s1z++vLSubeU9HezR6+M11PbH1HzzeeemY399Y78sPBOrq/H5snBPw19QeWD7Tal0fo3cQ59atfX2JB354fmLu7bdf2PqQcGSgqqqiYvN5xocrKyvKVV0ApE7NBnpoWsBKbyB2zIzcaTKmGcirsmw0S1araLOR3uR8Sjyzyyx2CVqDnvY8LgvCGqTUs9rozZICpIss43SCzWExG9O0GkkUEPRVGspYDWrIchLY0MbmlcBajHa0pzo6g0k2I+rpq3bVB8rUC1okJ3F/agzRZ9zqdCakpvqhjk0lnZ+efnm85FsnHwjsoRODoYMHOYVDttmzrdSlln12kY1+FJvjN5SUoRe9IpVJ0VFSViKWOPSYwy97qxP/viTxxNKrv9psQf2pR+WRb2S8OXE5vR7diRd/vUOjUErBHrKzg96TnOChWhaPdHiD6R6EtRaXIlos2rQ0LXRrA5RAWg+9MQUVMRwOkW9soWDBNK/HnZFOtnRWOdMVJzpTxklzV7m9ihvdqX4VFqgJeJatQpOPjCkF6SxjjD8dB8afkVMfk/SAnHgyZCTPXt/08cIUEsqTzZCwB/c0H2ppmR6oWxkMLlmSGF64fM2mwPRgwaXTWpo7g6G905bII6tWPbJjXv2MohWX9D61Z89wVdXGzeXlw8FQ9GdqOHJMtlNMGiGbclOBuyMtpmxKUxdoo1qHaqNserRGIVsRc3NzVCvlZGeZTWQhY5XRRFsGNKZM4ipGUFCZMFDWPzFQ3mTQTIbL6XuHg3ymyCiaMIyH0tfKBqlCMoPNqlrEIe/CbdNxSc9l0Wjib88a1+f9oqBgzpzueV3bRl+VR269NdGUiOz/zfC112EpzmtajN1tKd3FV0h3GTS0w9KR7ks4j2SNhvSWRZEKhwxRGdUtkl6WbXqZr2tIUx3qWDEqwkkF1b98kppLlKZaid7q/zfNkzmSRLLCpOaTiquaJ/NifO9Em6Z0r0K7bwwImadeeOaL0Rco+k8OazYkw55q8S5Sqp7iXvVlX2Sh2ZRmAGO3hnZMGo0Boqq7FMVlNILNZTGbsqnw6OkhpDcrVAzGF686mh4rqajHtNOVGM/u0DlC++zAnlg6h7PVG0KbF23sN45k0qXq3aPtHYllK29IHMFAu7tvRmFBwWUReWTTxoFE5ehWOS3x3eKSWLSQNofJ+nkd+csNBZTXIQijKbLXn2+mEgroll0yummzgu4cF+1snKGQMxg0ObOynNDt9Cii05kGUVO+IoaCpsLCGSYT2GYE/Pk+i3q/gQI1hKGUFbIMVQa/YkBDqn9lOKiEMTxuI7NPMaM51bsC3FMspqbDP7HY2Y3JSpHaQZ9pUCsXzYliYUtFxlCRuqMZDI1XzQIM0CMtoGaEuseeWkRy0ZmJVDJsau0QHShdl3gqRxBwRvii6i2JI4Jlwf7lFxcWtnfn+6sT9z8y65ZbektKhmeP7t6wY2f5+tKy0bXySHf0qd2LFhZ7G+Y98MCR6VLg+cT3SkqFm1Lhp+o8dky6mPyTrCQ50B/pVI1LGZOtKGaXK9scNRvpIW9GxZUN0WzKq7y83OxsW67ZhFOLh1pKxneDZG8nbR21VIu5R3uciYQ7h6XPsveUMsPWPTvPkhVmItWSyZY+sXmwqR3aLnjUrR/asA8DpaUrV5aWYmDbtg8SX23ejJ+M7pRHTvVse3DOnOqa2/vEPae69o5tvGrLlhP3SY5x+yAuw8/lvwmHQX3iUjLjMmnvSLdw+GiyeJAm1Ymi+1daqk9Cmo7/ZXtu9Wcr1PMLFzQ2Je5OaPVv6xSS1avRxgKEOiWhpZ1WIV1/T/92ip/8mMUELBLfghvpqKGjhY4qOuZLPTRlD+yR+qkKvsXtXWpb+gBAOweXpe5vokPd6MVI6hhdvZ8S8TBJVNLMq2gr0k5zFwOkWQGMcdrBHlb/w+ZVmOFqsNOho8pEGkOAJED4BbWxH3JCdWO0fR0CCTWMMtVLtWY+TShCM6HAiIygIiQYRxlPMY4wfsP4NeNXjH9nPMn4JeMXjJ8zfsb4KeMJxr8KHxH+hfETxj8zfsx4nPG/oJfwT4x/ZPyQ7z1G79USHGX8ALYTvs/4HuMRxnfhRcJ3oJPwbca3mHmT228w/gGOE/4H4+uMhxlfg/2Er2I24SHGV0gDCX7P+DK6CF/iFf6O2wcZhxhfYPytamEYVC0MA4zPMvMMrVqCpxifZMl/I50keAL2Ee5nmd+w/OOMjzET5/Y+XtuvWf5XLP8I48O8wl+SVSR4iFf+IDMPMN7P/H0q1o3Bz3mMf2X8Kcv+hPFenuEeXtHdbL+7+L47WXIvy9zBzO2MtzHugQcIb2WZWxh3M97M8rvQQriT8SbGHzH+kHX6AeP1jNcy/31u9zJu5/Vs45Vcw3g141Ze4RYYJtyEAcKNjFcxXsn8FYwxZtYzXsbYw7iO8buMaxm7GaOMaxhXsxarGDtZl0sZOxjbeQ0rGS9hC1zMuJy92sZWb2W8kK20jNtLud3C7WZuL+ERFjM2MV7A+B3GbzMu4DHP43YDYz1jHeNcxlrGGl55NWMVW2AO42yesVLFOje9MaozlzM3k7GMsYT5Im4XcjvEo/qmfhfGS5L/l+NO9e/Itv7tY25v8hP6f/eh8vgPOAHSUg0KZW5kc3RyZWFtCmVuZG9iagoxOSAwIG9iago8PAovTGVuZ3RoIDEzCi9GaWx0ZXIgL0ZsYXRlRGVjb2RlCj4+CnN0cmVhbQ0KeJz7/58w+AMAvIEk2Q0KZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgMjAKMDAwMDAwMDAwMCA2NTUzNSBmDQowMDAwMDAwMDE1IDAwMDAwIG4NCjAwMDAwMDAyMzMgMDAwMDAgbg0KMDAwMDAwMDA3OCAwMDAwMCBuDQowMDAwMDAwMzUyIDAwMDAwIG4NCjAwMDAwMDA0NjcgMDAwMDAgbg0KMDAwMDAwMDQ5OSAwMDAwMCBuDQowMDAwMDAxMjIwIDAwMDAwIG4NCjAwMDAwMDEyNzMgMDAwMDAgbg0KMDAwMDAwMTQwNCAwMDAwMCBuDQowMDAwMDAxNDU4IDAwMDAwIG4NCjAwMDAwMDE0OTEgMDAwMDAgbg0KMDAwMDAwMTUyNCAwMDAwMCBuDQowMDAwMDAxNjY0IDAwMDAwIG4NCjAwMDAwMDE5NDEgMDAwMDAgbg0KMDAwMDAwMjMxNSAwMDAwMCBuDQowMDAwMDAyMzkwIDAwMDAwIG4NCjAwMDAwMDI2ODEgMDAwMDAgbg0KMDAwMDAwMjgwMyAwMDAwMCBuDQowMDAwMDA3MTcyIDAwMDAwIG4NCnRyYWlsZXIKPDwKL1Jvb3QgMSAwIFIKL0luZm8gMyAwIFIKL0lEIFs8RTU0QTEzNUQ0MTU2N0M1NzkwNzJFQ0EyREREOUREMjFFMDU5ODFDQkU0RkYzNURDQTlEMjY0MUQ5RjM2OEZDOT4gPEU1NEExMzVENDE1NjdDNTc5MDcyRUNBMkRERDlERDIxRTA1OTgxQ0JFNEZGMzVEQ0E5RDI2NDFEOUYzNjhGQzk+XQovU2l6ZSAyMAo+PgpzdGFydHhyZWYKNzI1OQolJUVPRgo=";
+const $ = id => document.getElementById(id);
+const CAP = 0.718; // altura das maiúsculas da Helvetica/Arial Bold, em fração do corpo
+
+const DEFAULTS = {
+  endereco:     { pageW:80, pageH:30, qrW:22, qrH:22, qrTop:2, qrSquare:true, txtW:22, txtH:1.2, txtGap:1.5, txtSameW:true, txtAutoH:true, tpl:"{BL} - {RUA} - {P} - {AD} - {A}" },
+  movimentador: { pageW:80, pageH:30, qrW:22, qrH:22, qrTop:2, qrSquare:true, txtW:22, txtH:1.2, txtGap:1.5, txtSameW:true, txtAutoH:true, tpl:"{CODIGO}" },
+};
+const HINTS = {
+  endereco: "Campos lidos da etiqueta: {BL} {RUA} {P} {AD} {A} {AR} e {CODIGO}. Padrão: BL - RUA - P - AD - A.",
+  movimentador: "Padrão provisório (só o código). Campos disponíveis: {CODIGO} {BL} {RUA} {P} {AD} {A} {AR}.",
+};
+const FIELDS = ["pageW","pageH","qrW","qrH","qrTop","txtW","txtH","txtGap"];
+
+let mode = "endereco";
+let cfg = loadCfg();
+let labels = [];   // {code, fields, rawText, page, error}
+let sel = 0;
+let libsOk = false;
+
+function loadCfg(){
+  const out = JSON.parse(JSON.stringify(DEFAULTS));
+  try { const s = JSON.parse(localStorage.getItem("etiquetasQR.cfg") || "null"); if (s) for (const m of Object.keys(out)) Object.assign(out[m], s[m] || {}); } catch(e) {}
+  return out;
+}
+function status(el, msg, kind){ el.hidden = false; el.textContent = msg; el.className = "status" + (kind ? " " + kind : ""); }
+
+// ---------- configuração ----------
+function fillForm(){
+  const c = cfg[mode];
+  for (const f of FIELDS) $(f).value = c[f];
+  $("qrSquare").checked = c.qrSquare; $("txtSameW").checked = c.txtSameW; $("txtAutoH").checked = c.txtAutoH; $("tpl").value = c.tpl;
+  $("tplHint").textContent = HINTS[mode];
+  syncLinked();
+}
+function syncLinked(){
+  const c = cfg[mode];
+  if (c.qrSquare) { c.qrH = c.qrW; $("qrH").value = c.qrW; }
+  if (c.txtSameW) { c.txtW = c.qrW; $("txtW").value = c.qrW; }
+  $("qrH").disabled = c.qrSquare; $("txtW").disabled = c.txtSameW;
+  if (c.txtAutoH) { c.txtH = autoTextH(c); $("txtH").value = round(c.txtH, 2); }
+  $("txtH").disabled = c.txtAutoH;
+}
+function round(v, d){ const p = Math.pow(10, d); return Math.round(v * p) / p; }
+function readForm(){
+  const c = cfg[mode];
+  for (const f of FIELDS) { const v = parseFloat(String($(f).value).replace(",", ".")); if (isFinite(v) && v >= 0) c[f] = v; }
+  c.qrSquare = $("qrSquare").checked; c.txtSameW = $("txtSameW").checked; c.txtAutoH = $("txtAutoH").checked; c.tpl = $("tpl").value;
+  syncLinked();
+}
+for (const id of [...FIELDS, "tpl"]) $(id).addEventListener("input", () => { readForm(); refreshTexts(); draw(); });
+for (const id of ["qrSquare","txtSameW","txtAutoH"]) $(id).addEventListener("change", () => { readForm(); draw(); });
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  mode = b.dataset.mode;
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", String(x === b)));
+  fillForm(); refreshTexts(); draw();
+}));
+$("saveCfg").addEventListener("click", () => {
+  readForm();
+  try { localStorage.setItem("etiquetasQR.cfg", JSON.stringify(cfg)); status($("cfgStatus"), "Configuração salva neste navegador (Endereço e Movimentador).", "ok"); }
+  catch(e) { status($("cfgStatus"), "Este navegador não permitiu salvar. A configuração vale até fechar a página.", "err"); }
+});
+$("resetCfg").addEventListener("click", () => {
+  cfg[mode] = JSON.parse(JSON.stringify(DEFAULTS[mode])); fillForm(); refreshTexts(); draw();
+  status($("cfgStatus"), "Padrão de " + (mode === "endereco" ? "Endereço" : "Movimentador") + " restaurado. Clique em Salvar para manter.", "");
+});
+
+// ---------- texto da etiqueta ----------
+function parseFields(text){
+  const f = {};
+  const tokens = text.toUpperCase().replace(/\s+/g, "").match(/[A-Z]+\d+/g) || [];
+  for (const t of tokens) { const m = t.match(/^(BL|RUA|AD|AR|P|A)(\d+)$/); if (m && !(m[1] in f)) f[m[1]] = t; }
+  return f;
+}
+function renderText(l){
+  const miss = [];
+  const out = cfg[mode].tpl.replace(/\{([A-Z]+)\}/g, (_, k) => {
+    if (k === "CODIGO") return l.code;
+    if (l.fields[k]) return l.fields[k];
+    miss.push(k); return "";
+  });
+  return { text: out.trim(), miss };
+}
+function refreshTexts(){
+  labels.forEach(l => { const r = renderText(l); l.text = r.text; l.error = r.miss.length ? "Faltou na etiqueta: " + r.miss.join(", ") : (l.readError || ""); l.verified = false; });
+  renderTable(); $("download").disabled = !libsOk || !labels.some(l => !l.error);
+}
+
+// ---------- medidas do texto (mesma métrica no preview e no PDF) ----------
+let measureDoc = null;
+function textNaturalWidth(text, capMm){
+  if (!measureDoc) { measureDoc = new window.jspdf.jsPDF({ unit:"mm", format:[80,30] }); measureDoc.setFont("helvetica", "bold"); }
+  const pt = capMm / CAP / 0.352778; measureDoc.setFontSize(pt);
+  return measureDoc.getTextWidth(text);
+}
+function autoTextH(c){
+  const sample = labels[sel] ? labels[sel].text : "BL2 - RUA9 - P15 - AD7 - A5";
+  if (!window.jspdf || !sample) return c.txtH;
+  const w1 = textNaturalWidth(sample, 1);   // largura com letra de 1 mm
+  return w1 > 0 ? c.txtW / w1 : c.txtH;
+}
+
+// ---------- pré-visualização ----------
+function qrMatrix(code){ const q = qrcode(0, "M"); q.addData(code); q.make(); const n = q.getModuleCount(); const m = []; for (let r = 0; r < n; r++) { m.push([]); for (let c = 0; c < n; c++) m[r].push(q.isDark(r, c)); } return m; }
+function geometry(c){ return { qx:(c.pageW - c.qrW) / 2, qy:c.qrTop, tx:(c.pageW - c.txtW) / 2, ty:c.qrTop + c.qrH + c.txtGap }; }
+function draw(){
+  const cv = $("preview"), ctx = cv.getContext("2d"), c = cfg[mode];
+  const pxmm = Math.min(900 / c.pageW, 520 / c.pageH, 12);
+  cv.width = Math.round(c.pageW * pxmm); cv.height = Math.round(c.pageH * pxmm);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+  const l = labels[sel];
+  $("who").textContent = labels.length ? (sel + 1) + " de " + labels.length : "—";
+  if (!l || !window.qrcode) return;
+  const g = geometry(c), m = qrMatrix(l.code), n = m.length;
+  ctx.fillStyle = "#000";
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (m[r][k])
+    ctx.fillRect(Math.floor((g.qx + k * c.qrW / n) * pxmm), Math.floor((g.qy + r * c.qrH / n) * pxmm), Math.ceil(c.qrW / n * pxmm), Math.ceil(c.qrH / n * pxmm));
+  if (l.text && window.jspdf) {
+    const nat = textNaturalWidth(l.text, c.txtH), fontPx = c.txtH / CAP * pxmm;
+    ctx.save(); ctx.font = "bold " + fontPx + "px Arial, Helvetica, sans-serif";
+    const cw = ctx.measureText(l.text).width / pxmm;
+    ctx.translate(g.tx * pxmm, (g.ty + c.txtH) * pxmm); ctx.scale((c.txtW / cw), 1);
+    ctx.fillText(l.text, 0, 0); ctx.restore();
+    void nat;
+  }
+  ctx.strokeStyle = "rgba(64,0,1,.25)"; ctx.setLineDash([4, 4]);
+  if (g.ty + c.txtH > c.pageH || g.qx < 0 || g.tx < 0) { ctx.strokeStyle = "#B3261E"; }
+  ctx.strokeRect(0.5, 0.5, cv.width - 1, cv.height - 1);
+}
+$("prev").addEventListener("click", () => { if (labels.length) { sel = (sel - 1 + labels.length) % labels.length; afterSelect(); } });
+$("next").addEventListener("click", () => { if (labels.length) { sel = (sel + 1) % labels.length; afterSelect(); } });
+function afterSelect(){ if (cfg[mode].txtAutoH) syncLinked(); renderTable(); draw(); }
+
+function renderTable(){
+  const tb = $("rows"); tb.textContent = "";
+  labels.forEach((l, i) => {
+    const tr = document.createElement("tr"); tr.dataset.sel = i === sel ? "1" : "0";
+    const td = (t, cls) => { const x = document.createElement("td"); if (cls) x.className = cls; x.textContent = t; tr.appendChild(x); return x; };
+    td(String(i + 1)); td(l.code, "code"); td(l.text || "—"); td(String(l.page));
+    const s = td(""); const tag = document.createElement("span");
+    if (l.error) { tag.className = "tag err"; tag.textContent = l.error; }
+    else if (l.verified) { tag.className = "tag ok"; tag.textContent = "Conferido no PDF"; }
+    else { tag.className = "tag wait"; tag.textContent = "Lido"; }
+    s.appendChild(tag);
+    tr.addEventListener("click", () => { sel = i; afterSelect(); });
+    tb.appendChild(tr);
+  });
+}
+
+// ---------- leitura do PDF ----------
+function zxReader(formats){
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  const r = new ZXing.MultiFormatReader(); r.setHints(hints); return r;
+}
+const F = () => ZXing.BarcodeFormat;
+const ONE_D = () => [F().CODE_128, F().CODE_39, F().CODE_93, F().EAN_13, F().EAN_8, F().ITF, F().CODABAR, F().UPC_A, F().UPC_E];
+
+async function renderPage(page, scale){
+  const vp = page.getViewport({ scale });
+  const cv = document.createElement("canvas"); cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+  const ctx = cv.getContext("2d", { willReadFrequently:true }); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+  await page.render({ canvasContext:ctx, viewport:vp }).promise;
+  return { cv, ctx, vp };
+}
+// acha TODOS os códigos 1D da página: lê um, apaga a área dele, lê o próximo
+function findBarcodes(cv, ctx){
+  const reader = zxReader(ONE_D()); const found = [];
+  for (let guard = 0; guard < 200; guard++) {
+    let res;
+    try { const lum = new ZXing.HTMLCanvasElementLuminanceSource(cv); res = reader.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(lum))); }
+    catch(e) { break; }
+    const pts = res.getResultPoints().map(p => ({ x:p.getX(), y:p.getY() }));
+    const x1 = Math.max(0, Math.floor(Math.min(...pts.map(p => p.x)))), x2 = Math.min(cv.width - 1, Math.ceil(Math.max(...pts.map(p => p.x))));
+    const yRow = Math.round(pts.reduce((a, p) => a + p.y, 0) / pts.length);
+    const w = x2 - x1 + 1; const img = ctx.getImageData(x1, 0, w, cv.height).data;
+    const dark = y => { let d = 0; for (let x = 0; x < w; x++) if (img[(y * w + x) * 4] < 128) d++; return d / w; };
+    let top = yRow, bot = yRow;
+    while (top > 0 && dark(top - 1) > 0.12) top--;
+    while (bot < cv.height - 1 && dark(bot + 1) > 0.12) bot++;
+    const pad = Math.round((x2 - x1) * 0.06);
+    const rect = { x1:Math.max(0, x1 - pad), y1:Math.max(0, top - 2), x2:Math.min(cv.width, x2 + pad), y2:Math.min(cv.height, bot + 2) };
+    found.push({ code:res.getText(), rect });
+    ctx.fillStyle = "#fff"; ctx.fillRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
+  }
+  return found;
+}
+function distToRect(p, r){ const dx = Math.max(r.x1 - p.x, 0, p.x - r.x2), dy = Math.max(r.y1 - p.y, 0, p.y - r.y2); return Math.hypot(dx, dy); }
+
+async function readPdf(buf, name){
+  labels = []; sel = 0; renderTable(); draw();
+  status($("readStatus"), "Lendo " + name + "…", "");
+  $("dlStatus").hidden = true;
+  let pdf;
+  try { pdf = await pdfjsLib.getDocument({ data:buf }).promise; }
+  catch(e) { status($("readStatus"), "Não consegui abrir esse arquivo como PDF. Confira se é o PDF das etiquetas.", "err"); return; }
+  const problems = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    // duas leituras independentes em resoluções diferentes precisam concordar
+    const a = await renderPage(page, 3), b = await renderPage(page, 4.5);
+    const fa = findBarcodes(a.cv, a.ctx), fb = findBarcodes(b.cv, b.ctx);
+    const ka = fa.map(x => x.code).sort().join("|"), kb = fb.map(x => x.code).sort().join("|");
+    if (ka !== kb) { problems.push("pág. " + p + ": leituras não bateram (" + (ka || "nada") + " × " + (kb || "nada") + ")"); continue; }
+    if (!fa.length) { problems.push("pág. " + p + ": nenhum código de barras encontrado"); continue; }
+    const tc = await page.getTextContent();
+    const groups = fa.map(() => []);
+    for (const it of tc.items) {
+      if (!it.str || !it.str.trim()) continue;
+      const [x, y] = a.vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+      const h = Math.hypot(it.transform[2], it.transform[3]) * 3, wpx = (it.width || 0) * 3;
+      const c = { x:x + wpx / 2, y:y - h / 2 };
+      let best = 0, bd = Infinity; fa.forEach((f, i) => { const d = distToRect(c, f.rect); if (d < bd) { bd = d; best = i; } });
+      groups[best].push({ s:it.str, x:c.x, y:c.y });
+    }
+    const order = fa.map((f, i) => i).sort((i, j) => (fa[i].rect.y1 - fa[j].rect.y1) || (fa[i].rect.x1 - fa[j].rect.x1));
+    for (const i of order) {
+      const raw = groups[i].sort((u, v) => (u.y - v.y) || (u.x - v.x)).map(t => t.s).join("\n");
+      labels.push({ code:fa[i].code, fields:parseFields(raw), rawText:raw, page:p, readError:"" });
+    }
+  }
+  refreshTexts();
+  if (cfg[mode].txtAutoH) syncLinked();
+  draw();
+  const bad = labels.filter(l => l.error).length;
+  const msg = labels.length + " etiqueta(s) lida(s) em " + pdf.numPages + " página(s)" + (bad ? " — " + bad + " com problema (não entram no PDF)" : "") + (problems.length ? ". Atenção: " + problems.join("; ") : ".");
+  status($("readStatus"), msg, (bad || problems.length) ? "err" : "ok");
+}
+
+const drop = $("drop"), file = $("file");
+drop.addEventListener("click", () => file.click());
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); file.click(); } });
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) openFile(f); });
+file.addEventListener("change", () => { const f = file.files[0]; if (f) openFile(f); file.value = ""; });
+async function openFile(f){ $("fileName").textContent = f.name; if (!libsOk) return; readPdf(new Uint8Array(await f.arrayBuffer()), f.name); }
+
+// ---------- geração + conferência do PDF ----------
+function buildPdf(list){
+  const c = cfg[mode];
+  const orient = c.pageW >= c.pageH ? "landscape" : "portrait";
+  const doc = new window.jspdf.jsPDF({ unit:"mm", format:[c.pageW, c.pageH], orientation:orient, compress:true });
+  doc.setFont("helvetica", "bold");
+  list.forEach((l, idx) => {
+    if (idx) doc.addPage([c.pageW, c.pageH], orient);
+    const g = geometry(c), m = qrMatrix(l.code), n = m.length;
+    doc.setFillColor(0, 0, 0);
+    for (let r = 0; r < n; r++) {
+      let k = 0;
+      while (k < n) { if (!m[r][k]) { k++; continue; } let e = k; while (e < n && m[r][e]) e++;
+        // sobrepõe 0,03 mm só entre módulos vizinhos: sem isso aparecem fios brancos entre as
+        // linhas ao renderizar o PDF e alguns leitores falham. O tamanho externo não muda.
+        const EPS = 0.03;
+        doc.rect(g.qx + k * c.qrW / n, g.qy + r * c.qrH / n, (e - k) * c.qrW / n + (e < n ? EPS : 0), c.qrH / n + (r < n - 1 ? EPS : 0), "F"); k = e; }
+    }
+    if (l.text) {
+      const pt = c.txtH / CAP / 0.352778; doc.setFontSize(pt);
+      const nat = doc.getTextWidth(l.text);
+      doc.text(l.text, g.tx, g.ty + c.txtH, { horizontalScale:c.txtW / nat, baseline:"alphabetic" });
+    }
+  });
+  return doc.output("arraybuffer");
+}
+async function verifyPdf(buf, list){
+  const pdf = await pdfjsLib.getDocument({ data:buf.slice(0) }).promise;
+  const qr = zxReader([F().QR_CODE]); const erros = [];
+  if (pdf.numPages !== list.length) erros.push("o PDF tem " + pdf.numPages + " páginas, esperado " + list.length);
+  for (let p = 1; p <= Math.min(pdf.numPages, list.length); p++) {
+    const page = await pdf.getPage(p), l = list[p - 1];
+    // o QR precisa ler certo em duas resoluções diferentes
+    let lido = null;
+    for (const sc of [4, 7]) {
+      const { cv } = await renderPage(page, sc); let t = null;
+      try { t = qr.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(cv)))).getText(); } catch(e) {}
+      if (t !== l.code) { lido = t; break; } lido = t;
+    }
+    const items = (await page.getTextContent()).items.filter(i => i.str && i.str.trim());
+    const txt = items.map(i => i.str).join("").trim();
+    const larguraMm = items.reduce((a, i) => a + (i.width || 0), 0) * 25.4 / 72;
+    const alvo = l.text ? cfg[mode].txtW : 0;
+    if (lido !== l.code) erros.push("etiqueta " + p + ": QR leu " + (lido === null ? "nada" : "\"" + lido + "\"") + ", esperado \"" + l.code + "\"");
+    else if (txt !== l.text) erros.push("etiqueta " + p + ": texto \"" + txt + "\" diferente de \"" + l.text + "\"");
+    else if (l.text && Math.abs(larguraMm - alvo) > Math.max(0.2, alvo * 0.02)) erros.push("etiqueta " + p + ": texto com " + larguraMm.toFixed(2) + " mm de largura, esperado " + alvo.toFixed(2) + " mm");
+    else l.verified = true;
+  }
+  return erros;
+}
+$("download").addEventListener("click", async () => {
+  readForm();
+  const list = labels.filter(l => !l.error);
+  const c = cfg[mode], g = geometry(c);
+  if (g.ty + c.txtH > c.pageH + 1e-6 || g.qx < 0 || g.tx < 0) { status($("dlStatus"), "O QR ou o texto não cabem na etiqueta com essas medidas. Diminua os tamanhos ou aumente a etiqueta.", "err"); return; }
+  $("download").disabled = true; status($("dlStatus"), "Gerando e conferindo " + list.length + " etiqueta(s)…", "");
+  list.forEach(l => l.verified = false);
+  try {
+    const buf = buildPdf(list);
+    const erros = await verifyPdf(buf, list);
+    renderTable();
+    if (erros.length) { status($("dlStatus"), "Não liberei o download: " + erros.join("; "), "err"); return; }
+    const dl = window.claude && typeof window.claude.use === "function" ? await window.claude.use("downloads") : null;
+    if (!dl) { status($("dlStatus"), "Tudo conferido, mas o download não está disponível nesta visualização. Abra a página pelo link do claude.ai.", "err"); return; }
+    const nome = "Etiquetas_QR_" + (mode === "endereco" ? "Endereco" : "Movimentador") + "_" + new Date().toISOString().slice(0, 10) + ".pdf";
+    await dl.save({ filename:nome, data:new Blob([buf], { type:"application/pdf" }) });
+    status($("dlStatus"), list.length + " etiqueta(s) conferida(s) no PDF (QR e texto) e enviada(s) para download.", "ok");
+  } catch(e) {
+    const code = e && e.code;
+    status($("dlStatus"), code === "declined" ? "Download cancelado." : code === "rate_limited" ? "Já existe uma confirmação de download aberta." : "Não foi possível gerar o arquivo: " + ((e && e.message) || e), "err");
+  } finally { $("download").disabled = !labels.some(l => !l.error); }
+});
+
+// ---------- início ----------
+fillForm(); draw();
+function libsReady(){ return window.pdfjsLib && window.ZXing && window.qrcode && window.jspdf; }
+(function boot(tries){
+  if (!libsReady()) { if (tries > 100) { $("pill").textContent = "Falha ao carregar"; status($("readStatus"), "Não carreguei os leitores de PDF/código. Recarregue a página (precisa de internet).", "err"); return; } return setTimeout(() => boot(tries + 1), 100); }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  libsOk = true; $("pill").textContent = "Pronto"; fillForm();
+  const bin = atob(SAMPLE_B64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  readPdf(u, "exemplo (BL2 - RUA9 - AD7)");
+})(0);
+})();
+</script>
