@@ -3885,6 +3885,7 @@ try {
     autor:"",
     salvando:false, erro:null,
     editando:null, editTexto:"", apagando:null,
+    vstEditando:null, vstEditTexto:"", vstApagando:null, vstSalvando:false,
     hist:{
       aberto:false, aba:"ocorrencias",
       de:"", ate:"", status:"todas", filtro:"",
@@ -4064,6 +4065,14 @@ try {
   function acurObsFiltradas(){
     return acur.cache.obs.filter(function(o){ return acurNoPeriodo(o.criado_em) && acurFiltroSku(o.sku); });
   }
+  function acurVendeuSemTerFiltradas(){
+    var h = acur.hist;
+    return (acur.cache.vst || []).filter(function(v){
+      if (h.status === "abertas" && v.status !== "ABERTA") return false;
+      if (h.status === "resolvidas" && v.status !== "RESOLVIDA") return false;
+      return acurNoPeriodo(v.detectada_em) && acurFiltroSku(v.sku);
+    }).sort(function(a,b){ return String(b.detectada_em).localeCompare(String(a.detectada_em)); });
+  }
   function acurChecagensFiltradas(){
     var h = acur.hist;
     return (h.checagens || []).filter(function(r){
@@ -4180,12 +4189,61 @@ try {
       '<div class="filter-field"><span class="fl">&nbsp;</span><button class="btn-small" data-acur-act="limpar-filtros">Limpar filtros</button></div>' +
       '<div class="filter-field"><span class="fl">&nbsp;</span><button class="btn-primary" data-acur-act="exportar">⬇ Exportar para planilha (CSV)</button></div>' +
     '</div>';
-    var corpo = h.aba === "observacoes" ? acurAbaObservacoes(obs) : h.aba === "checagens" ? acurAbaChecagens() : acurAbaOcorrencias(ocorr);
+    var vst = acurVendeuSemTerFiltradas();
+    var corpo = h.aba === "observacoes" ? acurAbaObservacoes(obs) : h.aba === "checagens" ? acurAbaChecagens() : h.aba === "vendeu-sem-ter" ? acurAbaVendeuSemTer(vst) : acurAbaOcorrencias(ocorr);
     return '<section class="sector"><div class="card">' + cab +
-      '<div style="color:var(--ink-3); font-size:.8rem;">Cada ocorrência começa quando o SKU sai de 100% e termina quando Tiny e WMS voltam a bater. Os filtros valem para as três abas e para a exportação.</div>' +
+      '<div style="color:var(--ink-3); font-size:.8rem;">Cada ocorrência começa quando o SKU sai de 100% e termina quando Tiny e WMS voltam a bater. Os filtros valem para todas as abas e para a exportação.</div>' +
       filtros + acurRelatorioResumo(ocorr) +
-      '<div class="btn-row" style="margin-bottom:8px;">' + abaBtn("ocorrencias", "Ocorrências (" + ocorr.length + ")") + abaBtn("observacoes", "Observações (" + obs.length + ")") + abaBtn("checagens", "Checagens diárias") + '</div>' +
+      '<div class="btn-row" style="margin-bottom:8px;">' + abaBtn("ocorrencias", "Ocorrências (" + ocorr.length + ")") + abaBtn("observacoes", "Observações (" + obs.length + ")") + abaBtn("vendeu-sem-ter", "Vendeu sem ter (" + vst.length + ")") + abaBtn("checagens", "Checagens diárias") + '</div>' +
       corpo + '</div></section>';
+  }
+
+  function acurPedidosList(pedidos){
+    if (!pedidos || !pedidos.length) return '<span style="color:var(--ink-3); font-size:.78rem;">Nenhum pedido ainda por separar encontrado (WMS + Tiny) — o déficit pode já ter embalado, ou ser de um pedido mais antigo.</span>';
+    return '<ul style="margin:4px 0 0; padding-left:18px; font-size:.78rem;">' + pedidos.map(function(p){
+      return '<li>Ordem ' + escHtml(p.ordem) + (p.emissao ? ' · Emissão ' + escHtml(p.emissao) : '') +
+        (p.pedidoTiny ? ' · Pedido Tiny ' + escHtml(p.pedidoTiny) : '') +
+        (p.marketplace && p.marketplace !== "—" ? ' · ' + escHtml(p.marketplace) : '') +
+        (p.empresa ? ' · ' + escHtml(p.empresa) : '') +
+        ' · Qtd ' + fmtInt(Number(p.qtd) || 0) + ' un' +
+        (p.statusOrdem ? ' <span style="color:var(--ink-3);">(' + escHtml(p.statusOrdem) + ')</span>' : '') + '</li>';
+    }).join("") + '</ul>';
+  }
+
+  function acurVstItem(v){
+    var botoes;
+    if (acur.vstApagando === v.id){
+      botoes = '<span style="font-size:.78rem; color:var(--status-critical); font-weight:700;">Apagar este registro?</span> <button class="btn-danger" data-acur-act="vst-confirmar-apagar" data-id="' + v.id + '">Sim, apagar</button> <button class="btn-small" data-acur-act="vst-cancelar-apagar">Não</button>';
+    } else {
+      botoes = '<button class="btn-small" data-acur-act="vst-editar" data-id="' + v.id + '">Editar nota</button> ' +
+        (v.status === "ABERTA" ? '<button class="btn-small" data-acur-act="vst-resolver" data-id="' + v.id + '">Marcar resolvido</button> ' : '') +
+        '<button class="btn-danger" data-acur-act="vst-apagar" data-id="' + v.id + '">Apagar</button>';
+    }
+    var nota = acur.vstEditando === v.id
+      ? '<div class="form-field" style="margin-top:6px;"><textarea data-acur-vst-nota="' + v.id + '" style="min-height:56px; width:100%;" placeholder="Nota (ex.: por que essa análise estava errada, o que foi feito…)">' + escHtml(acur.vstEditTexto) + '</textarea></div>' +
+        '<div class="btn-row" style="margin-top:4px;"><button class="btn-primary" data-acur-act="vst-salvar-edicao" data-id="' + v.id + '"' + (acur.vstSalvando ? ' disabled' : '') + '>Salvar</button> <button class="btn-small" data-acur-act="vst-cancelar-edicao">Cancelar</button></div>'
+      : (v.nota ? '<div style="white-space:pre-wrap; font-size:.8rem; color:var(--ink); margin:4px 0; padding:6px 8px; background:var(--surface-2); border-radius:6px;">📝 ' + escHtml(v.nota) + '</div>' : '');
+    return '<div class="btn-row" style="margin-top:6px;">' + botoes + '</div>' + nota;
+  }
+
+  function acurAbaVendeuSemTer(lista){
+    if (!lista.length) return '<div style="color:var(--ink-3); padding:8px 0;">Nenhum SKU com saldo combinado (Ampec PR + SC) negativo com esses filtros.</div>';
+    var NCOL = 8;
+    return '<div style="color:var(--ink-3); font-size:.8rem; margin-bottom:6px;">Ampec PR e Ampec SC dividem estoque físico — SC pode ficar negativa coberta pela PR (só falta transferir manualmente). Aqui só entra quando a SOMA (PR + SC) fica negativa: venderam mais do que existe de verdade nas duas empresas juntas.</div>' +
+      '<div class="table-wrap"><table><thead><tr><th>SKU</th><th>Status</th><th>Detectada em</th><th>Tiny PR + SC (detecção)</th><th>Déficit</th><th>Agora</th><th>Resolvida em</th><th>Nota / ações</th></tr></thead><tbody>' +
+      lista.map(function(v){
+        return '<tr>' +
+          '<td><strong>' + escHtml(v.sku) + '</strong></td>' +
+          '<td>' + acurPill(v.status) + '</td>' +
+          '<td>' + acurHora(v.detectada_em) + '</td>' +
+          '<td>' + fmtInt(Number(v.tiny_pr_det)) + ' + ' + fmtInt(Number(v.tiny_sc_det)) + ' = <strong style="color:var(--status-critical);">' + fmtInt(Number(v.combinado_det)) + '</strong></td>' +
+          '<td style="color:var(--status-critical); font-weight:700;">' + fmtInt(Number(v.deficit)) + ' un</td>' +
+          '<td>' + (v.status === "ABERTA" ? fmtInt(Number(v.tiny_pr_atual)) + ' + ' + fmtInt(Number(v.tiny_sc_atual)) + ' = ' + fmtInt(Number(v.combinado_atual)) : fmtInt(Number(v.tiny_pr_res)) + ' + ' + fmtInt(Number(v.tiny_sc_res)) + ' = ' + fmtInt(Number(v.combinado_res))) + '</td>' +
+          '<td>' + (v.resolvida_em ? acurHora(v.resolvida_em) : '<span style="color:var(--ink-3);">—</span>') + '</td>' +
+          '<td style="white-space:normal; min-width:260px;">' + acurVstItem(v) + '</td>' +
+        '</tr>' +
+        '<tr><td colspan="' + NCOL + '" style="background:var(--surface-2); white-space:normal; padding:4px 10px 10px;"><div style="font-size:.78rem; font-weight:700; margin-top:4px;">Pedidos ainda por separar encontrados (WMS + Tiny) que podem explicar o déficit:</div>' + acurPedidosList(v.pedidos) + '</td></tr>';
+      }).join("") + '</tbody></table></div>';
   }
 
   /* ---------- exportação CSV (abre direto no Excel / Google Sheets) ---------- */
@@ -4213,6 +4271,15 @@ try {
           var oc = ocPorId[o.ocorrencia_id], dh = acurHora(o.criado_em);
           return [dh.slice(0,10), dh.slice(11), o.sku, o.autor || "", o.texto, oc ? acurHora(oc.detectada_em) : "", oc ? (oc.status === "ABERTA" ? "Aberta" : "Resolvida") : "",
             o.atualizado_em && new Date(o.atualizado_em) - new Date(o.criado_em) > 60000 ? acurHora(o.atualizado_em) : ""];
+        }));
+    }
+    if (h.aba === "vendeu-sem-ter"){
+      return acurBaixarCsv("acuracidade-vendeu-sem-ter-" + hoje + ".csv",
+        ["SKU","Status","Detectada em","Tiny PR (detecção)","Tiny SC (detecção)","Combinado (detecção)","Déficit","Tiny PR (agora)","Tiny SC (agora)","Combinado (agora)","Resolvida em","Nota","Pedidos encontrados (WMS+Tiny)"],
+        acurVendeuSemTerFiltradas().map(function(v){
+          return [v.sku, v.status === "ABERTA" ? "Aberto" : "Resolvido", acurHora(v.detectada_em), acurNum(v.tiny_pr_det), acurNum(v.tiny_sc_det), acurNum(v.combinado_det), acurNum(v.deficit),
+            acurNum(v.tiny_pr_atual), acurNum(v.tiny_sc_atual), acurNum(v.combinado_atual), v.resolvida_em ? acurHora(v.resolvida_em) : "", v.nota || "",
+            (v.pedidos || []).map(function(p){ return "Ordem " + p.ordem + (p.emissao ? " (Emissão " + p.emissao + ")" : "") + " · " + (p.pedidoTiny || "—") + " · " + p.qtd + " un"; }).join(" | ")];
         }));
     }
     if (h.aba === "checagens"){
@@ -4245,11 +4312,14 @@ try {
     var div = tabela.qtd - tabela.ok - tabela.conferencia;
     var exec = c.execs[0] || null;
     var abertas = c.ocorr.filter(function(o){ return o.status === "ABERTA"; }).length;
+    var vstAbertos = (c.vst || []).filter(function(v){ return v.status === "ABERTA"; });
+    var vstDeficit = vstAbertos.reduce(function(s,v){ return s + (Number(v.deficit) || 0); }, 0);
     var kpis = '<section class="sector"><div class="kpi-grid">' +
       acurKpi("Itens monitorados", fmtInt(ativos.length), "coluna INVENTARIADO da planilha") +
       acurKpi("100% agora", fmtInt(tabela.ok), c.ultimaData ? "checagem de " + acurDataBr(c.ultimaData) : "ainda sem checagem", "var(--status-good)") +
       acurKpi("Divergentes", fmtInt(div), div ? abertas + " ocorrência(s) aberta(s) — rechecadas de hora em hora" : "tudo batendo", div ? "var(--status-critical)" : "var(--status-good)") +
       acurKpi("Em conferência", fmtInt(tabela.conferencia), tabela.conferencia ? "aguardando separação no WMS — ainda não entra como divergência" : "nenhum pedido por separar", tabela.conferencia ? "var(--status-warning)" : "var(--ink-3)") +
+      acurKpi("Vendeu sem ter", fmtInt(vstAbertos.length), vstAbertos.length ? "déficit total " + fmtInt(vstDeficit) + " un (Ampec PR + SC negativo)" : "nenhum SKU com saldo combinado negativo", vstAbertos.length ? "var(--status-critical)" : "var(--ink-3)") +
       acurKpi("Última atualização", exec ? acurHora(exec.ultima_atualizacao_em || exec.concluido_em) : "—",
         exec ? "todos os itens, de hora em hora (08h–19h) · checagem completa das 07h: " + acurHora(exec.concluido_em).slice(11) : "") +
     '</div></section>';
@@ -4262,7 +4332,7 @@ try {
     // Guarda foco/cursor de um campo sendo digitado (re-render não pode apagar o que a pessoa escreve).
     var ativo = document.activeElement, chave = null, pos = null;
     if (ativo && target.contains(ativo)){
-      chave = ["data-acur-rascunho","data-acur-edit-texto","data-acur-autor","data-acur-hist-filtro"].filter(function(a){ return ativo.hasAttribute(a); })[0] || null;
+      chave = ["data-acur-rascunho","data-acur-edit-texto","data-acur-autor","data-acur-hist-filtro","data-acur-vst-nota"].filter(function(a){ return ativo.hasAttribute(a); })[0] || null;
       if (chave) { chave = '[' + chave + (ativo.getAttribute(chave) ? '="' + ativo.getAttribute(chave) + '"' : '') + ']'; try { pos = ativo.selectionStart; } catch(e) {} }
     }
     target.innerHTML = renderAcuracidade();
@@ -4329,6 +4399,43 @@ try {
     if (act === "cancelar-edicao"){ acur.editando = null; return acurPintar(); }
     if (act === "apagar"){ acur.apagando = id; acur.editando = null; return acurPintar(); }
     if (act === "cancelar-apagar"){ acur.apagando = null; return acurPintar(); }
+    if (act === "vst-editar"){
+      var vAtual = (acur.cache.vst || []).filter(function(x){ return x.id === id; })[0];
+      acur.vstEditando = id; acur.vstEditTexto = vAtual ? (vAtual.nota || "") : ""; acur.vstApagando = null; acurPintar();
+      var campoVst = document.querySelector('[data-acur-vst-nota="' + id + '"]');
+      if (campoVst) { campoVst.focus(); campoVst.setSelectionRange(campoVst.value.length, campoVst.value.length); }
+      return;
+    }
+    if (act === "vst-cancelar-edicao"){ acur.vstEditando = null; return acurPintar(); }
+    if (act === "vst-apagar"){ acur.vstApagando = id; acur.vstEditando = null; return acurPintar(); }
+    if (act === "vst-cancelar-apagar"){ acur.vstApagando = null; return acurPintar(); }
+    if (act === "vst-salvar-edicao" || act === "vst-confirmar-apagar" || act === "vst-resolver"){
+      if (acur.vstSalvando) return;
+      acur.vstSalvando = true; acurPintar();
+      (async function(){
+        try {
+          var res;
+          if (act === "vst-salvar-edicao"){
+            res = await sb.from("acuracidade_vendeu_sem_ter").update({nota:String(acur.vstEditTexto || "").trim() || null, atualizado_em:new Date().toISOString()}).eq("id", id);
+            if (res.error) throw new Error(res.error.message);
+            acur.vstEditando = null;
+          } else if (act === "vst-confirmar-apagar"){
+            res = await sb.from("acuracidade_vendeu_sem_ter").delete().eq("id", id);
+            if (res.error) throw new Error(res.error.message);
+            acur.vstApagando = null;
+          } else if (act === "vst-resolver"){
+            res = await sb.from("acuracidade_vendeu_sem_ter").update({status:"RESOLVIDA", resolvida_em:new Date().toISOString(), atualizado_em:new Date().toISOString()}).eq("id", id);
+            if (res.error) throw new Error(res.error.message);
+          }
+          var r2 = await sb.from("acuracidade_vendeu_sem_ter").select("*").order("detectada_em", {ascending:false});
+          if (!r2.error) acur.cache.vst = r2.data || [];
+        } catch(err) {
+          acur.erro = err && err.message ? err.message : String(err);
+        }
+        acur.vstSalvando = false; acurPintar();
+      })();
+      return;
+    }
     if (acur.salvando) return;
     acur.salvando = true; acurPintar();
     try {
@@ -4376,6 +4483,7 @@ try {
       var el = ev.target;
       if (el.hasAttribute("data-acur-rascunho")) acur.rascunho[el.getAttribute("data-acur-rascunho")] = el.value;
       else if (el.hasAttribute("data-acur-edit-texto")) acur.editTexto = el.value;
+      else if (el.hasAttribute("data-acur-vst-nota")) acur.vstEditTexto = el.value;
       else if (el.hasAttribute("data-acur-autor")) { acur.autor = el.value; try { localStorage.setItem("acur-autor", el.value); } catch(e) {} }
       else if (el.hasAttribute("data-acur-hist-filtro")) {
         acur.hist.filtro = el.value;
@@ -4406,10 +4514,11 @@ try {
         ultimaData ? sb.from("acuracidade_diaria").select("data,sku,contado,tiny_pr,tiny_sc,tiny_total,wms_ps,wms_rc,wms_full,wms_comparado,acuracidade,status,verificado_em,pendencias,wms_apos_separar").eq("data", ultimaData) : Promise.resolve({data:[]}),
         sb.from("acuracidade_execucao").select("*").order("data", {ascending:false}).limit(1),
         sb.from("acuracidade_observacoes").select("*").order("criado_em", {ascending:false}),
-        sb.from("acuracidade_ocorrencias").select("*").order("detectada_em", {ascending:false})
+        sb.from("acuracidade_ocorrencias").select("*").order("detectada_em", {ascending:false}),
+        sb.from("acuracidade_vendeu_sem_ter").select("*").order("detectada_em", {ascending:false})
       ]).then(function(res){
         for (var i = 0; i < res.length; i++) if (res[i].error) throw new Error(res[i].error.message);
-        acur.cache = {itens:res[0].data || [], ultima:res[1].data || [], ultimaData:ultimaData, execs:res[2].data || [], obs:res[3].data || [], ocorr:res[4].data || []};
+        acur.cache = {itens:res[0].data || [], ultima:res[1].data || [], ultimaData:ultimaData, execs:res[2].data || [], obs:res[3].data || [], ocorr:res[4].data || [], vst:res[5].data || []};
         acurPintar();
       });
     }).catch(function(err){
@@ -4435,6 +4544,7 @@ try {
     subscribeTable("acuracidade_itens", acurRecarregar);
     subscribeTable("acuracidade_ocorrencias", acurRecarregar);
     subscribeTable("acuracidade_diaria", acurRecarregar);
+    subscribeTable("acuracidade_vendeu_sem_ter", acurRecarregar);
     setInterval(function(){ if (document.getElementById("acuracidade-widget")) refreshAcuracidade(); }, 5*60*1000);
   }
 
